@@ -1,0 +1,295 @@
+<!doctype html>
+<html lang="he" dir="rtl">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<title>סיפורי הנינג'ות לקריאה</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Noto+Serif+Hebrew:wght@500;700&family=Rubik:wght@400;600;800&display=swap">
+<style>
+/* Layout: a night-sky reading scroll — story card in the middle, controls docked at the bottom, landscape iPad first */
+:root{
+  --bg:#eef1f6; --paper:#fffdf8; --ink:#1d2433; --muted:#6b7385;
+  --accent:#d9481e; --accent-soft:#fde3d8; --done:#2f8f5b; --line:#d9dde6;
+  --story:"Noto Serif Hebrew","Frank Ruhl Libre","Times New Roman",serif;
+  --ui:"Rubik","Arial Hebrew",Arial,sans-serif;
+  color-scheme:light;
+}
+@media (prefers-color-scheme:dark){
+  :root{ --bg:#11151f; --paper:#1a2030; --ink:#eef0f5; --muted:#9aa3b8;
+    --accent:#ff7a4d; --accent-soft:#4a2a20; --done:#5fd08f; --line:#2c3446; color-scheme:dark; }
+}
+*{box-sizing:border-box}
+html,body{height:100%;margin:0}
+body{background:var(--bg);color:var(--ink);font-family:var(--ui);
+  display:flex;flex-direction:column;overflow:hidden;
+  padding-top:env(safe-area-inset-top,0px);padding-bottom:env(safe-area-inset-bottom,0px);
+  padding-left:max(16px,env(safe-area-inset-left,0px));padding-right:max(16px,env(safe-area-inset-right,0px));
+  -webkit-user-select:none;user-select:none;-webkit-tap-highlight-color:transparent}
+button{font-family:var(--ui);cursor:pointer;-webkit-tap-highlight-color:transparent}
+button:focus-visible{outline:3px solid var(--accent);outline-offset:2px}
+
+header{display:flex;align-items:center;gap:12px;padding-block:10px;flex-wrap:wrap}
+.eps{display:flex;gap:8px;flex-wrap:wrap}
+.ep{border:2px solid var(--line);background:var(--paper);color:var(--ink);border-radius:999px;
+  padding:8px 16px;font-size:17px;font-weight:600}
+.ep[aria-pressed="true"]{border-color:var(--accent);background:var(--accent);color:#fff}
+.progress{flex:1;min-width:140px;display:flex;align-items:center;gap:10px;font-size:15px;color:var(--muted);font-variant-numeric:tabular-nums}
+.bar{flex:1;height:10px;background:var(--line);border-radius:99px;overflow:hidden}
+.bar i{display:block;height:100%;width:0;background:var(--done);transition:width .4s}
+
+main{flex:1;min-height:0;display:flex;justify-content:center}
+.card{width:100%;max-width:1100px;background:var(--paper);border-radius:22px;
+  box-shadow:0 2px 0 var(--line);display:flex;flex-direction:column;min-height:0}
+.card h1{margin:0;padding:18px 28px 6px;font-size:20px;font-weight:800;color:var(--accent);text-wrap:balance}
+.card h1 small{display:block;font-size:15px;color:var(--muted);font-weight:400;margin-top:2px}
+.text{flex:1;min-height:0;overflow-y:auto;padding:10px 28px 28px;
+  font-family:var(--story);font-size:clamp(28px,3.3vw,44px);line-height:2.15;font-weight:500}
+.w{display:inline;padding:0 .08em;border-radius:.25em;transition:background .15s,color .15s}
+.w.read{color:var(--done)}
+.w.cur{background:var(--accent-soft);color:var(--ink);box-shadow:0 .12em 0 var(--accent);font-weight:700}
+.w.skip{color:var(--muted)}
+.w.miss{animation:shake .35s}
+@keyframes shake{25%{transform:translateX(-4px)}75%{transform:translateX(4px)}}
+.w{display:inline-block}
+
+footer{display:flex;align-items:center;gap:12px;padding-block:12px;flex-wrap:wrap;justify-content:center}
+.btn{border:2px solid var(--line);background:var(--paper);color:var(--ink);border-radius:16px;
+  padding:12px 18px;font-size:18px;font-weight:600;min-height:56px}
+.btn:disabled{opacity:.4}
+.mic{width:84px;height:84px;border-radius:50%;border:none;background:var(--accent);color:#fff;
+  display:grid;place-items:center;position:relative}
+.mic svg{width:38px;height:38px}
+.mic.on::after{content:"";position:absolute;inset:-8px;border-radius:50%;border:4px solid var(--accent);animation:pulse 1.4s infinite}
+@keyframes pulse{0%{opacity:.8;transform:scale(.92)}100%{opacity:0;transform:scale(1.25)}}
+.heard{flex:1;min-width:180px;max-width:360px;font-size:16px;color:var(--muted);min-height:1.4em;
+  white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.heard b{color:var(--ink);font-weight:600}
+.status{font-size:15px;color:var(--muted);text-align:center;width:100%}
+.status.err{color:var(--accent);font-weight:600}
+
+.overlay{position:fixed;inset:0;background:rgba(10,14,22,.55);display:grid;place-items:center;z-index:5}
+.overlay .box{background:var(--paper);border-radius:24px;padding:36px 44px;text-align:center;max-width:90vw}
+.overlay h2{margin:0 0 8px;font-size:36px;color:var(--done)}
+.overlay p{margin:0 0 20px;font-size:20px;color:var(--muted)}
+.star{width:90px;height:90px;margin:0 auto 10px;animation:pop .6s ease-out}
+@keyframes pop{0%{transform:scale(0) rotate(-40deg)}70%{transform:scale(1.15)}100%{transform:scale(1)}}
+.paraDone{position:fixed;left:50%;top:40%;transform:translate(-50%,-50%);font-size:64px;font-weight:800;color:var(--done);
+  pointer-events:none;animation:fade 1.1s forwards;z-index:4}
+@keyframes fade{0%{opacity:0;transform:translate(-50%,-30%) scale(.6)}30%{opacity:1;transform:translate(-50%,-50%) scale(1)}100%{opacity:0}}
+@media (prefers-reduced-motion:reduce){*{animation:none!important;transition:none!important}}
+@media (max-width:640px){.text{font-size:26px;padding:8px 16px 20px}.card h1{padding:14px 16px 4px}.heard{order:9;max-width:none}}
+</style>
+</head>
+<body>
+<header>
+  <div class="eps" id="eps"></div>
+  <div class="progress"><span id="paraNum"></span><div class="bar"><i id="barFill"></i></div></div>
+</header>
+<main>
+  <article class="card">
+    <h1 id="title"></h1>
+    <div class="text" id="text" aria-live="polite"></div>
+  </article>
+</main>
+<footer>
+  <button class="btn" id="prevPara">→ קטע קודם</button>
+  <button class="btn" id="hearBtn">🔊 שמע מילה</button>
+  <button class="mic" id="micBtn" aria-label="התחל להקריא">
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><rect x="9" y="2" width="6" height="12" rx="3" fill="currentColor"/><path d="M5 11a7 7 0 0 0 14 0M12 18v4M8 22h8"/></svg>
+  </button>
+  <button class="btn" id="skipBtn">דלג על מילה</button>
+  <button class="btn" id="nextPara">קטע הבא ←</button>
+  <div class="heard" id="heard"></div>
+  <div class="status" id="status">לחץ על המיקרופון ותתחיל לקרוא בקול את המילה המסומנת</div>
+</footer>
+<div class="overlay" id="overlay" hidden>
+  <div class="box">
+    <svg class="star" viewBox="0 0 24 24"><path fill="#f5b301" d="M12 2l2.9 6.6 7.1.6-5.4 4.7 1.6 7L12 17.3 5.8 20.9l1.6-7L2 9.2l7.1-.6z"/></svg>
+    <h2>כל הכבוד!</h2>
+    <p id="overlayText">סיימת לקרוא את כל הפרק</p>
+    <button class="btn" id="overlayBtn">לפרק הבא</button>
+  </div>
+</div>
+
+<script>
+const EPISODES = [{"title": "הַמִּקְדָּשׁ שֶׁעַל הַגִּבְעָה הָרוֹעֶדֶת", "sub": "עוֹנָה 5 פֶּרֶק 4", "short": "פרק 4", "paras": ["לְאַחַר שֶׁמּוֹרוֹ גָּנַב אֶת מְגִלַּת הָאַיְירְגִּ'יצוּ מֵהָעִיר הַצָּפָה סְטִיקְס, הַנִּינְג'וֹת מָצְאוּ אֶת עַצְמָם בְּמֵרוֹץ נוֹאָשׁ נֶגֶד הַשָּׁעוֹן. סֶנְסֵיי ווּ וּמִיסָקוֹ הִזְכִּירוּ לָהֶם שֶׁנּוֹתְרָה רַק דֶּרֶךְ אַחַת אַחֲרוֹנָה בָּעוֹלָם לִלְמֹד אֶת אָמָּנוּת הַתְּעוּפָה: לְהַשִּׂיג עֹתֶק עַתִּיק שֶׁל הַמְּגִלָּה, הַשָּׁמוּר בְּתוֹךְ מִקְדַּשׁ הָרְפָאִים שֶׁל סֶנְסֵיי יַאנְג – מִבְנֶה עַתִּיק וּמְסֻכָּן הַנִּמְצָא עַל רֹאשׁ גִּבְעָה מְכֻסַּת עֲרָפֶל סָמִיךְ.", "אַךְ אַזְהָרָה נוֹרָאָה רִחֲפָה מֵעַל הַמִּקְדָּשׁ הַזֶּה: לִפְנֵי שָׁנִים רַבּוֹת, סֶנְסֵיי יַאנְג אִמֵּן שָׁם אֶת תַּלְמִידָיו בְּקַשְׁיוּת עָרְפִּית וּבְאַכְזָרִיּוּת, וְהֵטִיל עַל הַמָּקוֹם קְלָלָה אֲפֵלָה. הַכְּלָל שֶׁל הַמִּקְדָּשׁ הָיָה בַּרְזֶל: כָּל מִי שֶׁנִּכְנָס אֵלָיו וְלֹא מַסְפִּיק לָצֵאת מִמֶּנּוּ לִפְנֵי עֲלוֹת קֶרֶן הָאוֹר הָרִאשׁוֹנָה שֶׁל הַשַּׁחַר – הוֹפֵךְ בְּעַצְמוֹ לְרוּחַ רְפָאִים לָנֶצַח!", "בְּאֶמְצַע הַלַּיְלָה הֶחָשׁוּךְ, צָעֲדוּ אַרְבַּעַת הַנִּינְג'וֹת – קַאי, גֵ'יי, קוֹל וְזֵיין הַטִּיטַנְיוּם – בַּשְּׁבִיל הַמִּתְפַּתֵּל עַד לְשַׁעֲרֵי הַבַּרְזֶל שֶׁל הַמִּקְדָּשׁ.", "הֵם הִצְטַיְּדוּ בִּשְׁעוֹן חוֹל גָּדוֹל כְּדֵי לִמְדֹּד אֶת הַזְּמַן עַד הַזְּרִיחָה.", "\"יֵשׁ לָנוּ מְעַט מְאוֹד זְמַן,\" הִזְהִיר זֵיין וְעֵינָיו הַכְּחֻלּוֹת סָרְקוּ אֶת הֶחָצֵר. \"נִכְנָסִים, מוֹצְאִים אֶת הַמְּגִלָּה, וּבוֹרְחִים מִיָּד!\"", "כְּשֶׁדָּרְכוּ עַל מִפְתַּן הָעֵץ, נִסְגְּרוּ הַדְּלָתוֹת מֵאַחֲרֵיהֶם בְּטִרְקוּק מַחֲרִיד! הַמִּקְדָּשׁ רָחַשׁ מַלְכּוֹדוֹת: לוּחוֹת רִצְפָּה שֶׁנִּפְעָרוֹת לִתְהוֹמוֹת שֶׁל קוֹצִים, פִּסְלֵי דְּרָקוֹן שֶׁיּוֹרְקִים אֵשׁ, וְשִׁרְיוֹנוֹת עַתִּיקִים שֶׁהִתְעוֹרְרוּ לַחַיִּים וְתָקְפוּ אוֹתָם בַּחֲרָבוֹת.", "מִתּוֹךְ הַקִּירוֹת הֵגִיחַ פִּתְאוֹם סֶנְסֵיי יַאנְג עַצְמוֹ, רוּחַ רְפָאִים מַפְחִידָה עִם זָקָן שָׁקוּף וְקוֹל צוֹרֵם, שֶׁנִּסָּה לְהַפְחִיד אוֹתָם, לְהַפְרִיד בֵּינֵיהֶם וּלְעַכֵּב אוֹתָם עַד שֶׁיַּעֲלֶה הַבֹּקֶר.", "בְּאוֹתוֹ זְמַן, עַל סִפּוּן סְפִינַת הָאֲוִיר \"דֶּסְטִינִיז בָּאוּנְטִי\", נְיָה עָבְרָה שְׁעוֹת אִמּוּן מְפָרְכוֹת תַּחַת הַדְרָכָתוֹ שֶׁל סֶנְסֵיי ווּ.", "נְיָה הִתְקַשְּׁתָה מְאוֹד לְהַאֲמִין שֶׁיֵּשׁ בָּהּ אֶת יְסוֹד הַמַּיִם. הִיא נִסְּתָה לִשְׁלֹט בְּטִפּוֹת הַמַּיִם מִתּוֹךְ קְעָרָה, אַךְ הַמַּיִם נִשְׁפְּכוּ לְכָל עֵבֶר וְהִיא בָּעֲטָה בַּדְּלִי בְּתִסְכּוּל.", "\"אֲנִי סָמוּרַאי X!\" צָעֲקָה נְיָה בִּכְאֵב. \"אֲנִי מְתַקֶּנֶת מְנוֹעִים וּבוֹנָה כְּלֵי רֶכֶב, אֲנִי לֹא נִינְגָ'ה שֶׁל מַיִם!\"", "רוֹנִין, שֶׁעָלָה עַל הַסְּפִינָה כְּדֵי לִמְסֹר מֵידָע, נִגַּשׁ אֵלֶיהָ וְלִמֵּד אוֹתָהּ שִׁעוּר חָשׁוּב:", "\"כְּשֶׁאַתְּ נִלְחֶמֶת בַּגַּלִּים, הַגַּלִּים תָּמִיד מְנַצְּחִים. אַל תִּלָּחֲמִי בַּמַּיִם, נְיָה – תִּהְיִי הַמַּיִם. תִּזְרְמִי אִתָּם\". הַמִּלִּים הָאֵלֶּה נָגְעוּ בְּלִבָּהּ, וְהִיא חָזְרָה לְהִתְאַמֵּן בְּרֹגַע.", "בַּמִּקְדָּשׁ, הַזְּמַן אָזַל בִּמְהִירוּת מַבְהִילָה! גַּרְגִּירֵי הַחוֹל הָאַחֲרוֹנִים נָשְׁרוּ בַּשָּׁעוֹן.", "הַנִּינְג'וֹת פָּרְצוּ אֶל הַחֶדֶר הָעֶלְיוֹן, שָׁם מָצָא קוֹל אֶת מְגִלַּת הָאַיְירְגִּ'יצוּ הַקְּדוֹשָׁה מֻנַּחַת עַל גַּבֵּי כַּן אֶבֶן.", "\"יֵשׁ לִי אוֹתָהּ!\" זָעַק קוֹל, וְכֻלָּם רָצוּ בְּטֵרוּף אֶל עֵבֶר דַּלְתוֹת הַיְּצִיאָה.", "אַךְ בְּמַהֲלַךְ הַמְּנוּסָה בַּמִּסְדְּרוֹן, הַמְּגִלָּה הֶחְלִיקָה מִיָּדָיו שֶׁל קוֹל וְנָפְלָה עַל הָרִצְפָּה מֵאָחוֹר.", "\"קוֹל, תַּעֲזֹב אוֹתָהּ, הַשַּׁחַר עוֹלֶה!\" צָעַק קַאי בְּבֶהָלָה.", "\"לֹא!\" הֵשִׁיב קוֹל בְּאֹמֶץ לֵב. \"אִם לֹא נַשִּׂיג אֶת הַמְּגִלָּה, מוֹרוֹ יַשְׁמִיד אֶת הָעוֹלָם וְלֹא נוּכַל לְהַצִּיל אֶת לוֹיְד!\"", "קוֹל הִסְתּוֹבֵב לְאָחוֹר, רָץ אֶל הַמְּגִלָּה, תָּפַס אוֹתָהּ בִּזְרוֹעוֹתָיו וְזָרַק אוֹתָהּ בִּתְנוּפָה אַדִּירָה הַחוּצָה דֶּרֶךְ הַדֶּלֶת הַפְּתוּחָה יָשָׁר לִידֵיהֶם שֶׁל קַאי, גֵ'יי וְזֵיין.", "הַשְּׁלוֹשָׁה עָבְרוּ אֶת סַף הַדֶּלֶת בַּשְּׁנִיָּה שֶׁקֶּרֶן הַשֶּׁמֶשׁ הָרִאשׁוֹנָה נָגְעָה בַּקַּרְקַע. אַךְ קוֹל לֹא הִסְפִּיק.", "הוּא קָפַץ קָדִימָה וְיָצָא אֲלֵיהֶם שְׁנִיָּה אַחַת מְאֻחָר מִדַּי.", "כְּשֶׁהִבִּיטוּ בּוֹ חֲבֵרָיו בְּאֵימָה, נֶעֶתְקָה נְשִׁימָתָם: גּוּפוֹ שֶׁל קוֹל לֹא הָיָה עוֹד בָּשָׂר וָדָם. הוּא הָפַךְ לְשָׁקוּף, זָהַר בְּאוֹר יְרַקְרַק רוּחִי, וְרַגְלָיו כִּמְעַט רִחֲפוּ מֵעַל הָאֲדָמָה.", "קוֹל נֶהֱפַךְ לְרוּחַ רְפָאִים!", "קוֹל נִתְקַף בֶּהָלָה עֲצוּמָה, הִבִּיט בְּיָדָיו הַשְּׁקוּפוֹת וְזָעַק מִיֵּאוּשׁ. אַךְ קַאי הִנִּיחַ יָד עַל כְּתֵפוֹ הַשְּׁקוּפָה וְאָמַר:", "\"אַתָּה הִצַּלְתָּ אֶת כֻּלָּנוּ, קוֹל. אַתָּה אָחִינוּ, וַאֲנַחְנוּ לְעוֹלָם לֹא נַעֲזֹב אוֹתְךָ. אֲנַחְנוּ נִמְצָא דֶּרֶךְ לְהַחְזִיר אוֹתְךָ לִהְיוֹת אָדָם רָגִיל!\"", "הַמְּגִלָּה הָיְתָה בִּידֵיהֶם, וְכָעֵת יָכְלוּ הַנִּינְג'וֹת לִלְמֹד אֶת סוֹד הָאַיְירְגִּ'יצוּ."]}, {"title": "צְעָדִים בַּפְּסָגוֹת", "sub": "עוֹנָה 5 פֶּרֶק 5", "short": "פרק 5", "paras": ["עַל גַּבֵּי מַטֵּה הַבַּמְבּוּק שֶׁל סֶנְסֵיי ווּ הָיָה חָרוּט הָרֶמֶז הַשֵּׁנִי לִמְצִיאַת קִבְרוֹ שֶׁל מַסְטֶר הַסְּפִּינְגִּ'יצוּ הָרִאשׁוֹן: חֶרֶב הַמַּבָּט לֶעָתִיד. הַחֶרֶב הַזּוֹ הָיְתָה נְצוּרָה בְּמַמְלֶכֶת הָעֲנָנִים – עוֹלָם שְׁמֵימִי וּקְסוּם הַמְּרַחֵף גָּבוֹהַּ מֵעַל לָעֲנָנִים.", "הַדֶּרֶךְ הַיְּחִידָה לַחְדֹּר אֶל מַמְלֶכֶת הָעֲנָנִים הָיְתָה לְהַעְפִּיל אֶל רֹאשׁ הַר הַבְּלִין, הָהָר הַגָּבוֹהַּ, הַקַּר וְהַמְסֻכָּן בְּיוֹתֵר בְּנִינְגָ'אגּוֹ. שָׁם, בִּשְׁעַת צָהֳרַיִם מְדֻיֶּקֶת, נִפְעָר בַּשָּׁמַיִם שַׁעַר מַעֲבָר שְׁמֵימִי הַנִּקְרָא \"הָעַיִן הָעִוֶּרֶת\", וְרַק בְּעֶזְרַת תְּנוּעַת אַיְירְגִּ'יצוּ מֻשְׁלֶמֶת נִתָּן לִקְפֹּץ מֵהַפִּסְגָּה וְלַעֲבֹר דַּרְכּוֹ.", "הַנִּינְג'וֹת יָצְאוּ לַמַּסָּע בַּשֶּׁלֶג הַמַּקְפִּיא. הַטִּפּוּס הָיָה קָשֶׁה מִנְּשׂוֹא: רוּחוֹת שׁוֹרְקוֹת, סוּפוֹת שֶׁלֶג עִוְרוֹת וּנְטִיפֵי קֶרַח מְאַיְּמִים.", "קוֹל, שֶׁהִתְקַשָּׁה לְהִסְתַּגֵּל לִהְיוֹתוֹ רוּחַ רְפָאִים, הָיָה מְדֻכְדָּךְ. מַשַּׁב רוּחַ הֵעִיף אוֹתוֹ בְּקַלּוּת, וְהוּא פָּחַד פַּחַד מָוֶת מִמַּיִם וּמִשֶּׁלֶג נָמֵס, שֶׁהֲרֵי מַיִם מְהַוִּים סַכָּנַת הַשְׁמָדָה לְרוּחַ רְפָאִים.", "אַךְ זֵיין, שֶׁעִבֵּד נְתוּנִים בְּעֶזְרַת פִּיקְסֶל, עוֹדֵד אוֹתוֹ: \"קוֹל, הַגּוּף הֶחָדָשׁ שֶׁלְּךָ מַעֲנִיק לְךָ יִתְרוֹנוֹת אַדִּירִים! אַתָּה יָכוֹל לַעֲבֹר דֶּרֶךְ קִירוֹת, מִשְׁקָלְךָ אֶפֶס, וְאַתָּה מְסֻגָּל לְהַחְזִיק חֲפָצִים בִּרְצוֹנְךָ!\"", "קוֹל נִסָּה זֹאת, וְגִלָּה שֶׁהוּא יָכוֹל לָלֶכֶת מֵעַל שִׁכְבוֹת הַשֶּׁלֶג הָעֲמֻקּוֹת בְּלִי לִשְׁקֹעַ כְּלָל.", "לְפֶתַע, קוֹל מַחֲרִיד הֵרִיד אֶת הֶהָרִים!", "מוֹרוֹ, הַשּׁוֹלֵט בְּגוּפוֹ שֶׁל לוֹיְד, הֵגִיחַ בְּרֹאשׁ צְבָא רוּחוֹת הָרְפָאִים שֶׁלּוֹ: אָרְצֶ'ר עִם חִצָּיו הַמְכֻשָּׁפִים, וְרֵיית' הַזּוֹעֵם, וְרוּחוֹת רְפָאִים נוֹסָפוֹת שֶׁרִחֲפוּ בֵּין הַמְּצוּקִים.", "\"הַחֶרֶב שַׁיֶּכֶת לִי!\" זָעַק מוֹרוֹ, וּבְעֶזְרַת כּוֹחַ הָרוּחַ שִׁלַּח מַפּוֹלֶת שְׁלָגִים עֲנָקִית שֶׁגָּלְשָׁה בְּרַעַם אַדִּיר יָשָׁר אֶל עֵבֶר הַנִּינְג'וֹת!", "קְרָב הִשָּׂרְדוּת מְטֹרָף פָּרַץ עַל שְׂפַת הַתְּהוֹם:", "קַאי וְגֵ'יי נֶאֶחְזוּ בְּקִירוֹת הַקֶּרַח כְּדֵי שֶׁלֹּא לְהִתְרַסֵּק; זֵיין הִשְׁתַּמֵּשׁ בְּחִשּׁוּבֵי מַסְלוּל חִלּוּץ מְדֻיָּקִים כְּדֵי לַהֲדֹף אֶת רוּחוֹת הָרְפָאִים בְּנִשְׁקוֹ; וְקוֹל הִפְגִּין אֹמֶץ לֵב יוֹצֵא דֹּפֶן: הוּא עָבַר דֶּרֶךְ גּוּשֵׁי הַסֶּלַע וְהַקֶּרַח הַנּוֹפְלִים, חִלֵּץ אֶת חֲבֵרָיו מִתַּחַת לַשֶּׁלֶג הַכָּבֵד וְהוֹכִיחַ שֶׁרוּחַ הַנִּינְגָ'ה שֶׁלּוֹ חֲזָקָה מִתָּמִיד!", "הַשָּׁעוֹן הֵרְאָה שֶׁרֶגַע פְּתִיחַת הַשַּׁעַר הִגִּיעַ. בְּרֹאשׁ הָהָר נִפְעַר מַעְגַּל אוֹר שְׁמֵימִי זוֹהֵר – \"הָעַיִן הָעִוֶּרֶת\"!", "\"עַכְשָׁו! אַיְירְגִּ'יצוּ!\" צָעַק קַאי.", "הַנִּינְג'וֹת הִסְתַּחְרְרוּ בְּסוּפוֹת טוֹרְנָדוֹ זוֹהֲרוֹת שֶׁל אַיְירְגִּ'יצוּ, נִתְּרוּ מִן הַצּוּק הַקָּפוּא אֶל עֹמֶק הַשָּׁמַיִם, וְחָצוּ אֶת הַשַּׁעַר בַּשְּׁנִיָּה שֶׁנִּנְעַל!", "מוֹרוֹ נִסָּה לְזַנֵּק מֵאַחֲרֵיהֶם, אַךְ נִתְקַל בַּשַּׁעַר הַנִּסְגָּר וְנֶהֱדַף לְאָחוֹר בְּזַעַם.", "הַנִּינְג'וֹת נָחֲתוּ בְּבִטְחָה עַל שְׁבִיל זָהָב מַרְהִיב שֶׁמֵּעַל לֶעָנָנִים – הֵם הִגִּיעוּ אֶל מַמְלֶכֶת הָעֲנָנִים!"]}, {"title": "מַמְלֶכֶת הָעֲנָנִים", "sub": "עוֹנָה 5 פֶּרֶק 6", "short": "פרק 6", "paras": ["מַמְלֶכֶת הָעֲנָנִים נִגְלְתָה לִפְנֵי הַנִּינְג'וֹת כְּעוֹלָם שָׁלֵו, זוֹהֵר וְעוֹצֵר נְשִׁימָה: מִקְדָּשֵׁי זָהָב מְרַחֲפִים עַל עַנְנֵי כָּבוֹד, מַפָּלִים שֶׁל אוֹר, וּגְשָׁרִים תְּלוּיִים בֵּין הַשְּׁחָקִים.", "הֵם פָּגְשׁוּ אֶת מַנְהִיג הַמַּמְלָכָה – סֶנְסֵיי נוֹבּוּ וְאֶת הַנְּזִירִים הַסּוֹדִיִּים שֶׁל מַמְלֶכֶת הָעֲנָנִים. הַנְּזִירִים גִּלּוּ לָהֶם סוֹד יְקוּמִי מַדְהִים: תַּפְקִידָם הוּא לִכְתֹּב בִּמְגִלּוֹת גּוֹרָל אֶת כָּל מָה שֶׁמִּתְרַחֵשׁ בְּכָל שֵׁשׁ-עֶשְׂרֵה הַמַּמְלָכוֹת!", "\"וּמָה עִם חֶרֶב הַמַּבָּט לֶעָתִיד?\" שָׁאַל קַאי בְּחֹסֶר סַבְלָנוּת.", "סֶנְסֵיי נוֹבּוּ הוֹבִיל אוֹתָם אֶל מִקְדַּשׁ הַחֶרֶב וְהִסְבִּיר:", "\"לַהַב הַחֶרֶב הַזּוֹ עָשׂוּי מִבְּדֹלַח זְמַן טָהוֹר. כַּאֲשֶׁר לוֹחֵם אוֹחֵז בָּהּ בִּקְרָב, הִיא מַרְאָה לוֹ בְּהִשְׁתַּקְּפוּת הַלַּהַב אֶת הַמַּהֲלָךְ הַבָּא שֶׁל הַיָּרִיב שְׁנִיָּה אַחַת לִפְנֵי שֶׁהוּא מְבַצֵּעַ אוֹתוֹ! בְּכָךְ, הָאוֹחֵז בָּהּ יָכוֹל לַחְסוֹם כָּל מַכָּה\".", "אַךְ הַשַּׁלְוָה לֹא נִמְשְׁכָה זְמַן רַב:", "מוֹרוֹ סֵרֵב לְהִכָּנַע. הוּא הִשְׁתַּמֵּשׁ בְּכֹחוֹת הָרוּחַ שֶׁלּוֹ בְּעָצְמָה עִלָּאִית וּבְעֶזְרַת כְּשָׁפִים אֲפֵלִים פָּרַץ שַׁעַר מַעֲבָר מִשֶּׁלּוֹ, וְחָדַר אֶל מַמְלֶכֶת הָעֲנָנִים מְלֻוֶּה בְּמִפְלֶצֶת אֵימָה מְכֻנֶּפֶת!", "מוֹרוֹ זִנֵּק יָשָׁר אֶל הַמִּקְדָּשׁ, הִדִּיחַ אֶת הַשּׁוֹמְרִים וְתָפַס אֶת חֶרֶב הַמַּבָּט לֶעָתִיד בִּידוֹ!", "קְרָב עֲנָקִים מַסְעִיר פָּרַץ עַל גִּשְׁרֵי הָעֲנָנִים הַתְּלוּיִים.", "קַאי הִסְתַּעֵר עַל מוֹרוֹ בְּחֶרֶב שְׁלוּפָה. אַךְ מוֹרוֹ, שֶׁהֶחְזִיק בְּחֶרֶב הַמַּבָּט לֶעָתִיד, חִיֵּךְ בְּזִלְזוּל: בְּכָל פַּעַם שֶׁקַּאי הֵנִיף אֶת נִשְׁקוֹ, מוֹרוֹ רָאָה אֶת הַמַּהֲלוּמָה מֵרֹאשׁ בְּלַהַב הַחֶרֶב, חָמַק בְּקַלּוּת וְהִנְחִית מַכַּת נֶגֶד שֶׁהִפִּילָה אֶת קַאי לָאָרֶץ!", "\"אַתָּה לֹא יָכוֹל לְהַבִּיס אוֹתִי, קַאי!\" צָחַק מוֹרוֹ בְּקוֹלוֹ הַמְצַמְרֵר שֶׁל הַדִּבּוּק. \"הַחֶרֶב מַרְאָה לִי כָּל מַחְשָׁבָה שֶׁלְּךָ!\"", "קַאי שָׁכַב עַל הַגֶּשֶׁר הַמִּתְנַדְנֵד וְהֵבִין אֶת הַסּוֹד:", "הַחֶרֶב חוֹזָה רַק אֶת מָה שֶׁהַלּוֹחֵם מְתַכְנֵן לַעֲשׂוֹת בְּמוֹחוֹ!", "קַאי רוֹקֵן אֶת מוֹחוֹ מִכָּל מַחְשָׁבָה וְתָכְנִית. הוּא פָּעַל בְּאֹפֶן סְפּוֹנְטָנִי לַחֲלוּטִין, לְלֹא שׁוּם כַּוָּנָה מֻקְדֶּמֶת: הוּא זִנֵּק הַצִּדָּה, בָּעַט בְּעַנְנַת אָבָק זְהֻבָּה, זָרַק חֶבֶל בְּהַפְתָּעָה וְהִכָּה בְּמַהֲלוּמָה מְדֻיֶּקֶת יָשָׁר בְּמַרְפְּקוֹ שֶׁל מוֹרוֹ!", "הַחֶרֶב לֹא הִסְפִּיקָה לַחֲזוֹת אֶת הַמַּהֲלָךְ הַבִּלְתִּי צָפוּי, וְנִשְׁמְטָה מִיָּדוֹ שֶׁל מוֹרוֹ!", "הַחֶרֶב הִתְגַּלְגְּלָה עַל שְׂפַת הַמִּרְפֶּסֶת וְעָמְדָה לִצְנֹחַ אֶל הַתְּהוֹם.", "קַאי זִנֵּק בְּגִלְגּוּל מַרְהִיב וְתָפַס אֶת נִצַּב הַחֶרֶב בַּשְּׁנִיָּה הָאַחֲרוֹנָה!", "כְּשֶׁהֶחְזִיק קַאי בַּחֶרֶב הַמַּבָּט לֶעָתִיד, הִבִּיט בְּהִשְׁתַּקְּפוּת הַבְּדֹלַח שֶׁלָּהּ, וּלְפֶתַע נִגְלָה לְעֵינָיו הָרֶמֶז הַשְּׁלִישִׁי וְהָאַחֲרוֹן מִמַּטֵּה הַבַּמְבּוּק שֶׁל ווּ:", "מִקּוּמוֹ הַמְדֻיָּק שֶׁל קִבְרוֹ שֶׁל מַסְטֶר הַסְּפִּינְגִּ'יצוּ הָרִאשׁוֹן – עָמֹק מִתַּחַת לִפְנֵי הַיָּם הַסּוֹעֲרִים!", "\"יֵשׁ לָנוּ אֶת הַחֶרֶב וְאֶת הַמִּקּוּם!\" קָרָא קַאי אֶל גֵ'יי, זֵיין וְקוֹל.", "אַרְבַּעַת הַנִּינְג'וֹת הִפְעִילוּ אֶת הָאַיְירְגִּ'יצוּ בְּתֵאוּם מֻשְׁלָם, חָמְקוּ מִמּוֹרוֹ הַזּוֹעֵם וְקָפְצוּ חֲזָרָה דֶּרֶךְ שַׁעַר הַמַּמְלָכָה אֶל עוֹלַם נִינְגָ'אגּוֹ, מוּכָנִים וּנְחוּשִׁים לַקְּרָב הַמַּכְרִיעַ עַל הַצָּלַת לוֹיְד וּמְצִיאַת גְּבִישׁ הַמַּמְלָכוֹת!"]}];
+
+/* ---------- Hebrew normalization ---------- */
+const FINALS = {'ך':'כ','ם':'מ','ן':'נ','ף':'פ','ץ':'צ'};
+function norm(s){
+  return (s||'').toLowerCase()
+    .replace(/[֑-ׇ]/g,'')          // niqqud + maqaf
+    .replace(/[ךםןףץ]/g,c=>FINALS[c])
+    .replace(/[^א-תa-z0-9]/g,'');
+}
+const hasHeb = s => /[א-ת]/.test(s);
+// names the recognizer might write in English letters
+const ALIAS = {jay:'גיי',kai:'קאי',cole:'קול',coal:'קול',zane:'זיינ',lloyd:'לויד',nya:'ניה',wu:'וו',
+  ninja:'נינגה',ninjas:'נינגות',ninjago:'נינגאגו',morro:'מורו',sensei:'סנסיי',ronin:'רונינ',pixal:'פיקסל',x:'איקס'};
+const NUM = {'1':['אחת','אחד'],'2':['שתיימ','שניימ','שתי','שני'],'3':['שלוש','שלושה'],'4':['ארבע','ארבעה'],
+  '5':['חמש','חמשה'],'6':['שש','ששה','שיש'],'16':['ששעשרה','שישעשרה']};
+function lev(a,b){
+  const m=a.length,n=b.length; if(!m) return n; if(!n) return m;
+  let prev=Array.from({length:n+1},(_,j)=>j);
+  for(let i=1;i<=m;i++){const cur=[i];
+    for(let j=1;j<=n;j++) cur[j]=Math.min(prev[j]+1,cur[j-1]+1,prev[j-1]+(a[i-1]===b[j-1]?0:1));
+    prev=cur;}
+  return prev[n];
+}
+function matches(tok,word){
+  if(!tok||!word) return false;
+  tok = ALIAS[tok] ? norm(ALIAS[tok]) : tok;
+  if(tok===word) return true;
+  if(/^\d+$/.test(tok)) return (NUM[tok]||[]).some(w=>word===w || (word.endsWith(w) && word.length-w.length<=1));
+  // full vs. vowel-less spelling (מאוחר / מאחר): drop ו and י on both sides
+  const sa=tok.replace(/[וי]/g,''), sb=word.replace(/[וי]/g,'');
+  if(sa && sa===sb) return true;
+  const L=word.length, tol = L<=2?0 : L<=5?1 : 2;
+  return lev(tok,word)<=tol || (sb.length>2 && lev(sa,sb)<=Math.max(0,tol-1));
+}
+
+/* ---------- state ---------- */
+const KEY='ninja-reader-v1';
+let st={ep:0,para:0,word:0};
+try{const s=JSON.parse(localStorage.getItem(KEY)); if(s&&EPISODES[s.ep]) st=s;}catch(e){}
+function save(){try{localStorage.setItem(KEY,JSON.stringify(st))}catch(e){}}
+
+let words=[];
+const $=id=>document.getElementById(id);
+
+function renderEps(){
+  $('eps').innerHTML='';
+  EPISODES.forEach((ep,i)=>{
+    const b=document.createElement('button'); b.className='ep'; b.textContent=ep.short;
+    b.setAttribute('aria-pressed', i===st.ep); b.onclick=()=>{st={ep:i,para:0,word:0};loadPara();};
+    $('eps').appendChild(b);
+  });
+}
+function loadPara(){
+  const ep=EPISODES[st.ep];
+  if(st.para>=ep.paras.length) st.para=ep.paras.length-1;
+  renderEps();
+  $('title').innerHTML = ep.title + (ep.sub?'<small>'+ep.sub+'</small>':'');
+  const box=$('text'); box.innerHTML=''; words=[];
+  ep.paras[st.para].split(/\s+/).filter(Boolean).forEach((t,i)=>{
+    const sp=document.createElement('span'); sp.className='w'; sp.textContent=t;
+    const key=norm(t); const w={el:sp,key,req:hasHeb(key),text:t};
+    sp.onclick=()=>{ st.word=i; skipNonReq(); paint(); };
+    words.push(w); box.appendChild(sp); box.appendChild(document.createTextNode(' '));
+  });
+  if(st.word>=words.length) st.word=0;
+  skipNonReq(); paint();
+  $('prevPara').disabled = st.para===0;
+  $('paraNum').textContent = 'קטע '+(st.para+1)+' מתוך '+ep.paras.length;
+  $('barFill').style.width = (st.para/ep.paras.length*100)+'%';
+  consumed = lastLen;  // ignore words heard before this paragraph
+  save();
+}
+function skipNonReq(){ while(st.word<words.length && !words[st.word].req) st.word++; }
+function paint(){
+  words.forEach((w,i)=>{
+    w.el.className='w'+(i<st.word?(w.req?' read':' skip'):'')+(i===st.word?' cur':'');
+  });
+  const cur=words[st.word];
+  if(cur) cur.el.scrollIntoView({block:'center',behavior:'smooth'});
+}
+function advance(){
+  st.word++; skipNonReq(); paint(); save();
+  if(st.word>=words.length) paraFinished();
+}
+let finishing=false;
+function paraFinished(){
+  if(finishing) return; finishing=true;
+  const ep=EPISODES[st.ep];
+  const last = st.para>=ep.paras.length-1;
+  $('barFill').style.width = ((st.para+1)/ep.paras.length*100)+'%';
+  if(last){
+    $('overlayText').textContent='סיימת לקרוא את '+ep.short;
+    const more = st.ep<EPISODES.length-1;
+    $('overlayBtn').textContent = more?'לפרק הבא':'להתחיל מחדש';
+    $('overlay').hidden=false; finishing=false; return;
+  }
+  const d=document.createElement('div'); d.className='paraDone'; d.textContent='✓ יפה!';
+  document.body.appendChild(d); setTimeout(()=>d.remove(),1200);
+  setTimeout(()=>{ st.para++; st.word=0; finishing=false; loadPara(); },1100);
+}
+$('overlayBtn').onclick=()=>{
+  $('overlay').hidden=true;
+  st = st.ep<EPISODES.length-1 ? {ep:st.ep+1,para:0,word:0} : {ep:0,para:0,word:0};
+  loadPara();
+};
+$('prevPara').onclick=()=>{ if(st.para>0){st.para--;st.word=0;loadPara();} };
+$('nextPara').onclick=()=>{
+  const ep=EPISODES[st.ep];
+  if(st.para<ep.paras.length-1){st.para++;st.word=0;loadPara();}
+  else { st.word=words.length; paint(); paraFinished(); }
+};
+$('skipBtn').onclick=()=>{ if(st.word<words.length) advance(); };
+
+/* ---------- speech synthesis: hear the current word ---------- */
+$('hearBtn').onclick=()=>{
+  const w=words[st.word]; if(!w||!('speechSynthesis' in window)) return;
+  const wasOn=listening; if(wasOn) stopRec(true);
+  const u=new SpeechSynthesisUtterance(w.text.replace(/[^֐-׿a-zA-Z0-9'׳]/g,''));
+  u.lang='he-IL'; u.rate=.8;
+  const v=speechSynthesis.getVoices().find(v=>v.lang&&v.lang.startsWith('he')); if(v) u.voice=v;
+  u.onend=()=>{ if(wasOn) startRec(); };
+  speechSynthesis.cancel(); speechSynthesis.speak(u);
+};
+
+/* ---------- speech recognition ---------- */
+const SR = window.SpeechRecognition || window.webkitSpeechRecognition;
+let rec=null, listening=false, consumed=0, lastLen=0, wakeLock=null;
+function setStatus(t,err){ const s=$('status'); s.textContent=t; s.className='status'+(err?' err':''); }
+
+function flashMiss(){ const w=words[st.word]; if(!w) return; w.el.classList.remove('miss'); void w.el.offsetWidth; w.el.classList.add('miss'); }
+
+function startRec(){
+  if(!SR){ setStatus('הדפדפן הזה לא תומך בזיהוי דיבור. אפשר להתקדם בלחיצה על המילה הבאה או על "דלג".',true); return; }
+  rec=new SR(); rec.lang='he-IL'; rec.continuous=true; rec.interimResults=true; rec.maxAlternatives=3;
+  consumed=0; lastLen=0;
+  rec.onresult=e=>{
+    const toks=[];
+    for(let r=0;r<e.results.length;r++){
+      const res=e.results[r];
+      res[0].transcript.trim().split(/\s+/).filter(Boolean).forEach(x=>toks.push({k:norm(x),raw:x,fin:res.isFinal}));
+    }
+    lastLen=toks.length;
+    $('heard').innerHTML='שמעתי: <b>'+toks.slice(-5).map(t=>t.raw).join(' ').replace(/</g,'')+'</b>';
+    let i=Math.min(consumed,toks.length);
+    while(i<toks.length && st.word<words.length && !finishing){
+      const tk=toks[i], cur=words[st.word].key;
+      if(!tk.k){ i++; consumed=i; continue; }
+      if(matches(tk.k,cur)){ i++; consumed=i; advance(); continue; }
+      if(i+1<toks.length && matches(tk.k+toks[i+1].k,cur)){ i+=2; consumed=i; advance(); continue; }
+      if(tk.fin){ i++; consumed=i; flashMiss(); continue; }
+      break;   // interim word that doesn't match yet — wait for more
+    }
+  };
+  rec.onerror=e=>{
+    if(e.error==='not-allowed'||e.error==='service-not-allowed'){
+      listening=false; uiMic();
+      setStatus('אין הרשאה למיקרופון או לזיהוי דיבור. באייפד: הגדרות ← Safari ← מיקרופון, וגם לוודא שהכתבה (Dictation) מופעלת.',true);
+    } else if(e.error==='network'){ setStatus('זיהוי הדיבור צריך חיבור לאינטרנט.',true); }
+    else if(e.error==='language-not-supported'){ listening=false; uiMic(); setStatus('עברית לא נתמכת בזיהוי הדיבור במכשיר הזה. כדאי להוסיף עברית בהגדרות ← כללי ← מקלדת ← הכתבה.',true); }
+  };
+  rec.onend=()=>{ if(listening){ try{ startRec(); }catch(e){} } };
+  try{ rec.start(); listening=true; uiMic(); setStatus('מקשיב… תקרא את המילה המסומנת'); }catch(e){}
+  if('wakeLock' in navigator && !wakeLock){ navigator.wakeLock.request('screen').then(l=>{wakeLock=l;l.onrelease=()=>wakeLock=null;}).catch(()=>{}); }
+}
+function stopRec(keepState){
+  listening=false; if(rec){ rec.onend=null; try{rec.stop();}catch(e){} rec=null; }
+  if(!keepState){ uiMic(); setStatus('ההקשבה נעצרה. לחץ על המיקרופון כדי להמשיך'); if(wakeLock){wakeLock.release().catch(()=>{});} }
+}
+function uiMic(){ $('micBtn').classList.toggle('on',listening); $('micBtn').setAttribute('aria-label',listening?'עצור הקשבה':'התחל להקריא'); }
+$('micBtn').onclick=()=>{ listening?stopRec():startRec(); };
+document.addEventListener('visibilitychange',()=>{ if(document.hidden && listening) stopRec(); });
+if(!SR) setStatus('הדפדפן הזה לא תומך בזיהוי דיבור. אפשר להתקדם בלחיצה על מילה או על "דלג".',true);
+
+loadPara();
+</script>
+</body>
+</html>
