@@ -100,6 +100,27 @@ footer.ctl{display:flex;align-items:center;gap:12px;padding-block:12px;flex-wrap
 .plist{display:flex;flex-direction:column;gap:10px}
 .empty{color:var(--muted);font-size:18px;padding:30px 0}
 
+/* report */
+.chips{display:flex;gap:8px}
+.chip{border:2px solid var(--line);background:var(--paper);border-radius:99px;padding:8px 16px;font-size:16px;font-weight:600}
+.chip[aria-pressed="true"]{background:var(--ink);border-color:var(--ink);color:var(--paper)}
+.tiles{display:grid;grid-template-columns:repeat(auto-fit,minmax(170px,1fr));gap:12px;max-width:1000px}
+.tile{background:var(--paper);border:2px solid var(--line);border-radius:16px;padding:14px 16px}
+.tile b{display:block;font-size:34px;font-weight:800;font-variant-numeric:tabular-nums}
+.tile span{color:var(--muted);font-size:15px}
+.rsec{max-width:1000px}
+.rsec h3{font-size:19px;font-weight:800;margin:26px 0 4px}
+.rsec .hint{color:var(--muted);font-size:15px;margin:0 0 10px}
+.rrow{display:flex;align-items:center;gap:12px;background:var(--paper);border:2px solid var(--line);border-radius:14px;padding:10px 14px;margin-bottom:8px;flex-wrap:wrap}
+.rrow.bad{border-color:var(--warn)}
+.rrow .lbl{font-weight:700;min-width:130px}
+.rrow .wd{font-family:var(--story);font-size:28px;font-weight:700;min-width:110px}
+.rrow .meta{flex:1;min-width:180px;color:var(--muted);font-size:15px;font-variant-numeric:tabular-nums}
+.meter{width:150px;height:12px;background:var(--line);border-radius:99px;overflow:hidden;flex:none}
+.meter i{display:block;height:100%;background:var(--done)}
+.rrow.bad .meter i{background:var(--warn)}
+.pct{font-weight:800;font-variant-numeric:tabular-nums;min-width:3.2em}
+
 /* dialogs */
 .overlay{position:fixed;inset:0;background:rgba(10,14,22,.55);display:grid;place-items:center;z-index:5;padding:16px}
 .box{background:var(--paper);border-radius:24px;padding:28px 32px;max-width:720px;width:100%;max-height:90%;overflow-y:auto}
@@ -125,6 +146,7 @@ footer.ctl{display:flex;align-items:center;gap:12px;padding-block:12px;flex-wrap
 <section class="screen" id="libScreen">
   <div class="top">
     <h2 class="brand">דף קריאה חכם<small>בוחרים סיפור, קוראים בקול, והמילה עוברת רק כשהיא נקראת נכון</small></h2>
+    <button class="btn" id="openReport">דוח הורה</button>
     <button class="btn warn" id="openPractice">מילים לתרגול<span class="badge" id="pBadge1">0</span></button>
   </div>
   <div class="scroll">
@@ -188,6 +210,20 @@ footer.ctl{display:flex;align-items:center;gap:12px;padding-block:12px;flex-wrap
   </div>
 </section>
 
+<!-- ============ REPORT ============ -->
+<section class="screen" id="rpScreen" hidden>
+  <div class="top">
+    <button class="btn" id="rpBack">→ ספרייה</button>
+    <h2>דוח הורה</h2>
+    <div class="chips" id="rpRange">
+      <button class="chip" data-d="7">7 ימים</button>
+      <button class="chip" data-d="30">30 יום</button>
+      <button class="chip" data-d="0">הכול</button>
+    </div>
+  </div>
+  <div class="scroll" id="rpBody"></div>
+</section>
+
 <!-- ============ DIALOGS ============ -->
 <div class="overlay" id="doneOverlay" hidden>
   <div class="box center">
@@ -226,6 +262,7 @@ const BUILTIN = [{"id": "ninjago-s5", "title": "נינג'גו – עונה 5", "
 const LS={get(k,d){try{const v=localStorage.getItem(k);return v?JSON.parse(v):d}catch(e){return d}},
           set(k,v){try{localStorage.setItem(k,JSON.stringify(v))}catch(e){}}};
 let userStories=LS.get('srp-stories',[]);
+let wlog=LS.get('srp-log',[]);           // [time, story, ep, para, wordIdx, key, text, kind, fails, ms]
 let learned=LS.get('srp-learned',{});     // wordKey -> [heard keys]
 let practice=LS.get('srp-practice',[]);   // {word,key,heard[],reason,loc:{s,e,p,i},t}
 let progress=LS.get('srp-progress',{});   // storyId -> {ep,para,word}
@@ -305,7 +342,7 @@ function matches(tok,word){
 }
 
 /* ---------- UI helpers ---------- */
-function show(id){ ['libScreen','epScreen','rdScreen','prScreen'].forEach(s=>$(s).hidden=(s!==id)); }
+function show(id){ ['libScreen','epScreen','rdScreen','prScreen','rpScreen'].forEach(s=>$(s).hidden=(s!==id)); }
 let toastT; function toast(t){ const el=$('toast'); el.textContent=t; el.hidden=false; clearTimeout(toastT); toastT=setTimeout(()=>el.hidden=true,2600); }
 function badges(){ $('pBadge1').textContent=practice.length; $('pBadge2').textContent=practice.length; }
 function armButton(btn,label,fn){ // two-tap confirm, no system dialogs
@@ -388,7 +425,16 @@ function loadPara(){
 }
 function skipNonReq(){ while(cur.word<words.length && !words[cur.word].req) cur.word++; }
 function nextReq(i){ let j=i+1; while(j<words.length && !words[j].req) j++; return j<words.length?j:-1; }
-function resetTries(){ fails=0; failHeard=[]; }
+function resetTries(){ fails=0; failHeard=[]; wordStart=Date.now(); }
+let wordStart=Date.now();
+// kind: 'ok' first try, 'retry' read after tries, 'miss' moved on after 2 tries, 'skip' skip button
+function logWord(i,kind){
+  const w=words[i]; if(!w||!w.req) return;
+  const ms=listening?Date.now()-wordStart:null;
+  wlog.push([Date.now(),cur.story,cur.ep,cur.para,i,w.key,w.text.replace(/[.,!?:;"״()–—]/g,''),kind,fails,ms]);
+  if(wlog.length>30000) wlog=wlog.slice(-30000);
+  LS.set('srp-log',wlog);
+}
 function paint(){
   words.forEach((w,i)=>{
     let c='w';
@@ -434,7 +480,7 @@ $('nextPara').onclick=()=>{
   if(cur.para<ep.paras.length-1){cur.para++;cur.word=0;loadPara();}
   else { cur.word=words.length; paint(); paraFinished(); }
 };
-$('skipBtn').onclick=()=>{ if(cur.word<words.length){ markOrange(cur.word,'skip'); advance(); } };
+$('skipBtn').onclick=()=>{ if(cur.word<words.length){ logWord(cur.word,'skip'); markOrange(cur.word,'skip'); advance(); } };
 $('rdBack').onclick=()=>openStory(cur.story);
 $('epBack').onclick=renderLibrary;
 
@@ -473,11 +519,11 @@ function onResult(e){
   while(i<toks.length && cur.word<words.length && !finishing){
     const tk=toks[i], w=words[cur.word];
     if(!tk.k){ i++; consumed=i; continue; }
-    if(matches(tk.k,w.key)){ i++; consumed=i; advance(); continue; }
-    if(i+1<toks.length && matches(tk.k+toks[i+1].k,w.key)){ i+=2; consumed=i; advance(); continue; }
+    if(matches(tk.k,w.key)){ logWord(cur.word,fails?'retry':'ok'); i++; consumed=i; advance(); continue; }
+    if(i+1<toks.length && matches(tk.k+toks[i+1].k,w.key)){ logWord(cur.word,fails?'retry':'ok'); i+=2; consumed=i; advance(); continue; }
     const nx=nextReq(cur.word);
     if(fails>=2 && nx>=0 && matches(tk.k,words[nx].key)){   // after two tries, reading the next word moves on
-      markOrange(cur.word,'miss'); cur.word=nx; i++; consumed=i; advance(); continue;
+      logWord(cur.word,'miss'); markOrange(cur.word,'miss'); cur.word=nx; resetTries(); logWord(nx,'ok'); i++; consumed=i; advance(); continue;
     }
     const settled=tk.fin || i<toks.length-1;
     if(settled){ fails++; failHeard.push(tk.raw); i++; consumed=i; flashMiss(); showTries(); continue; }
@@ -497,7 +543,7 @@ function startRec(){
     else if(e.error==='language-not-supported'){ listening=false; uiMic(); setStatus('עברית לא נתמכת בזיהוי הדיבור במכשיר הזה. כדאי להוסיף עברית בהגדרות ← כללי ← מקלדת ← הכתבה.','err'); }
   };
   rec.onend=()=>{ if(listening){ rec=null; try{ startRec(); }catch(e){} } };
-  try{ rec.start(); listening=true; uiMic(); setStatus('מקשיב… תקרא את המילה המסומנת'); }catch(e){}
+  try{ rec.start(); listening=true; wordStart=Date.now(); uiMic(); setStatus('מקשיב… תקרא את המילה המסומנת'); }catch(e){}
   if('wakeLock' in navigator && !wakeLock){ navigator.wakeLock.request('screen').then(l=>{wakeLock=l;l.onrelease=()=>wakeLock=null;}).catch(()=>{}); }
 }
 function restartRec(){
@@ -580,7 +626,7 @@ $('addSave').onclick=()=>{
 
 /* ---------- backup ---------- */
 $('dlBackup').onclick=()=>{
-  const data={app:'smart-reading-page',v:1,date:new Date().toISOString(),learned,practice,userStories,progress};
+  const data={app:'smart-reading-page',v:1,date:new Date().toISOString(),learned,practice,userStories,progress,log:wlog};
   const blob=new Blob([JSON.stringify(data,null,1)],{type:'application/json'});
   const a=document.createElement('a'); a.href=URL.createObjectURL(blob);
   a.download='גיבוי-דף-קריאה-'+new Date().toISOString().slice(0,10)+'.json';
@@ -597,6 +643,7 @@ $('restoreFile').onchange=e=>{
       for(const k in (d.learned||{})){ const arr=learned[k]||[]; d.learned[k].forEach(h=>{ if(!arr.includes(h)) arr.push(h); }); learned[k]=arr; }
       (d.userStories||[]).forEach(s=>{ if(!userStories.some(x=>x.id===s.id)) userStories.push(s); });
       const key=p=>[p.loc.s,p.loc.e,p.loc.p,p.loc.i].join('/');
+      const lk=r=>r[0]+'/'+r[1]+'/'+r[4]; const hl=new Set(wlog.map(lk)); (d.log||[]).forEach(r=>{ if(!hl.has(lk(r))) wlog.push(r); }); wlog.sort((a,b)=>a[0]-b[0]); LS.set('srp-log',wlog);
       const have=new Set(practice.map(key)); (d.practice||[]).forEach(p=>{ if(!have.has(key(p))) practice.push(p); });
       progress=Object.assign({},d.progress||{},progress);
       LS.set('srp-learned',learned); LS.set('srp-stories',userStories); LS.set('srp-practice',practice); LS.set('srp-progress',progress);
@@ -613,6 +660,91 @@ $('copyFixes').onclick=()=>{
   const fallback=()=>{ const ta=document.createElement('textarea'); ta.value=text; document.body.appendChild(ta); ta.select(); try{document.execCommand('copy'); toast('התיקונים הועתקו');}catch(e){toast('לא הצלחתי להעתיק');} ta.remove(); };
   if(navigator.clipboard&&navigator.clipboard.writeText) navigator.clipboard.writeText(text).then(()=>toast('התיקונים הועתקו. אפשר להדביק אותם לי בצ׳אט'),fallback); else fallback();
 };
+
+/* ---------- parent report ---------- */
+let rpDays=LS.get('srp-rpdays',7);
+$('openReport').onclick=()=>{ stopRec(); renderReport(); show('rpScreen'); };
+$('rpBack').onclick=renderLibrary;
+document.querySelectorAll('#rpRange .chip').forEach(c=>c.onclick=()=>{ rpDays=+c.dataset.d; LS.set('srp-rpdays',rpDays); renderReport(); });
+const pctOf=(a,b)=>b?Math.round(a/b*100):0;
+const HES=5000;  // a word that took more than 5 seconds counts as hesitation
+function el(tag,cls,text){ const e=document.createElement(tag); if(cls) e.className=cls; if(text!=null) e.textContent=text; return e; }
+function rrow(opts){
+  const r=el('div','rrow'+(opts.bad?' bad':''));
+  if(opts.word) r.appendChild(el('span','wd',opts.word)); else r.appendChild(el('span','lbl',opts.label));
+  if(opts.pct!=null){ const m=el('div','meter'); const i=el('i'); i.style.width=opts.pct+'%'; m.appendChild(i); r.appendChild(m); r.appendChild(el('span','pct',opts.pct+'%')); }
+  r.appendChild(el('span','meta',opts.meta));
+  (opts.buttons||[]).forEach(([t,fn])=>{ const b=el('button','btn',t); b.onclick=fn; r.appendChild(b); });
+  return r;
+}
+function renderReport(){
+  document.querySelectorAll('#rpRange .chip').forEach(c=>c.setAttribute('aria-pressed',+c.dataset.d===rpDays));
+  const B=$('rpBody'); B.innerHTML='';
+  const since=rpDays?Date.now()-rpDays*864e5:0;
+  const L=wlog.filter(r=>r[0]>=since);
+  if(!L.length){ B.appendChild(el('div','empty','עוד אין קריאה בתקופה הזאת. הדוח מתמלא בזמן שנועם קורא עם המיקרופון.')); return; }
+  const first=L.filter(r=>r[7]==='ok').length;
+  const orange=L.filter(r=>r[7]==='miss'||r[7]==='skip').length;
+
+  // reading pace per paragraph sitting: consecutive words in the same paragraph, gaps under 60s
+  const runs=[]; let run=null;
+  L.forEach(r=>{ const k=r[1]+'/'+r[2]+'/'+r[3];
+    if(run && run.k===k && r[0]-run.end<60000){ run.end=r[0]; run.n++; }
+    else { run={k,start:r[0],end:r[0],n:1}; runs.push(run); } });
+  let pw=0,pt=0; runs.forEach(x=>{ if(x.n>=5 && x.end-x.start>=10000){ pw+=x.n-1; pt+=x.end-x.start; } });
+  const wpm=pt?Math.round(pw/(pt/60000)):null;
+
+  const tiles=el('div','tiles');
+  [[L.length,'מילים שנקראו'],[pctOf(first,L.length)+'%','נקראו נכון בניסיון הראשון'],[wpm!=null?wpm:'–','מילים בדקה (קצב קריאה)'],[orange,'מילים כתומות (לא זוהו או דילג)']]
+    .forEach(([v,t])=>{ const d=el('div','tile'); d.appendChild(el('b',null,String(v))); d.appendChild(el('span',null,t)); tiles.appendChild(d); });
+  B.appendChild(tiles);
+
+  // hardest words
+  const byW={};
+  L.forEach(r=>{ const o=byW[r[5]]||(byW[r[5]]={text:r[6],n:0,ok:0,retry:0,miss:0,skip:0,hes:0,tries:0}); o.n++; o[r[7]]++; o.tries+=r[8]; if(r[9]!=null&&r[9]>HES&&r[7]!=='skip') o.hes++; });
+  const hard=Object.values(byW).map(o=>({...o,score:o.miss*3+o.skip*3+o.retry*1.5+o.hes})).filter(o=>o.score>0).sort((a,b)=>b.score-a.score).slice(0,20);
+  const s1=el('div','rsec'); s1.appendChild(el('h3',null,'המילים הקשות ביותר'));
+  s1.appendChild(el('p','hint','מסודרות לפי כמה הוא התקשה בהן. "היסוס" אומר שעברו יותר מ-5 שניות עד שהמילה זוהתה. חלק מזה יכול להיות עיכוב של זיהוי הדיבור.'));
+  if(!hard.length) s1.appendChild(el('div','empty','אין מילים שהוא התקשה בהן בתקופה הזאת.'));
+  hard.forEach(o=>{
+    const parts=[]; if(o.miss) parts.push('לא זוהה '+o.miss); if(o.skip) parts.push('דילג '+o.skip); if(o.retry) parts.push('נקרא אחרי ניסיון חוזר '+o.retry); if(o.hes) parts.push('היסוס '+o.hes);
+    s1.appendChild(rrow({word:o.text,bad:o.miss+o.skip>0,meta:parts.join(' · ')+(o.n>1?'  (הופיעה '+o.n+' פעמים)':''),buttons:[['🔊',()=>speak(o.text)]]}));
+  });
+  B.appendChild(s1);
+
+  // by paragraph
+  const byP={};
+  L.forEach(r=>{ const k=r[1]+'|'+r[2]+'|'+r[3]; const o=byP[k]||(byP[k]={s:r[1],e:r[2],p:r[3],n:0,ok:0,retry:0,miss:0,skip:0,last:0}); o.n++; o[r[7]]++; o.last=Math.max(o.last,r[0]); });
+  const paceP={}; runs.forEach(x=>{ if(x.n>=5&&x.end-x.start>=10000){ const k=x.k.replace(/\//g,'|'); const q=paceP[k]||(paceP[k]={w:0,t:0}); q.w+=x.n-1; q.t+=x.end-x.start; } });
+  const s2=el('div','rsec'); s2.appendChild(el('h3',null,'לפי קטעים'));
+  s2.appendChild(el('p','hint','האחוז הוא כמה מילים נקראו נכון בניסיון הראשון. קטע מתחת ל-80% מסומן בכתום. "פתח" מעביר לקטע כדי לקרוא אותו שוב.'));
+  Object.values(byP).sort((a,b)=>a.s<b.s?-1:a.s>b.s?1:a.e-b.e||a.p-b.p).forEach(o=>{
+    const st=findStory(o.s); const ep=st&&st.episodes[o.e]; if(!ep) return;
+    const pc=pctOf(o.ok,o.n); const q=paceP[o.s+'|'+o.e+'|'+o.p];
+    const meta=[o.n+' מילים']; if(o.retry) meta.push('ניסיון חוזר '+o.retry); if(o.miss) meta.push('לא זוהה '+o.miss); if(o.skip) meta.push('דילג '+o.skip); if(q&&q.t) meta.push(Math.round(q.w/(q.t/60000))+' מילים בדקה');
+    s2.appendChild(rrow({label:(allStories().length>1?st.title+' · ':'')+ep.short+' · קטע '+(o.p+1),pct:pc,bad:pc<80,meta:meta.join(' · '),
+      buttons:[['פתח',()=>{ cur.story=o.s; cur.ep=o.e; cur.para=o.p; cur.word=0; openReader(); }]]}));
+  });
+  B.appendChild(s2);
+
+  // by word length
+  const buckets=[['מילים קצרות (עד 3 אותיות)',0,3],['מילים בינוניות (4–6 אותיות)',4,6],['מילים ארוכות (7 אותיות ומעלה)',7,99]];
+  const s3=el('div','rsec'); s3.appendChild(el('h3',null,'לפי אורך מילה'));
+  s3.appendChild(el('p','hint','עוזר לראות אם הקושי הוא במילים ארוכות או דווקא במילים הקטנות.'));
+  buckets.forEach(([t,a,b])=>{ const R=L.filter(r=>r[5].length>=a&&r[5].length<=b); if(!R.length) return;
+    const pc=pctOf(R.filter(r=>r[7]==='ok').length,R.length); s3.appendChild(rrow({label:t,pct:pc,bad:pc<80,meta:R.length+' מילים'})); });
+  B.appendChild(s3);
+
+  // by day
+  const byD={}; L.forEach(r=>{ const d=new Date(r[0]); const k=d.getFullYear()+'-'+(d.getMonth()+1)+'-'+d.getDate(); const o=byD[k]||(byD[k]={t:r[0],n:0,ok:0}); o.n++; if(r[7]==='ok') o.ok++; });
+  const s4=el('div','rsec'); s4.appendChild(el('h3',null,'לפי יום'));
+  Object.values(byD).sort((a,b)=>b.t-a.t).forEach(o=>{ const pc=pctOf(o.ok,o.n);
+    s4.appendChild(rrow({label:new Date(o.t).toLocaleDateString('he-IL',{weekday:'long',day:'numeric',month:'numeric'}),pct:pc,bad:pc<80,meta:o.n+' מילים'})); });
+  const clr=el('button','btn','מחק את נתוני הדוח'); clr.style.marginTop='20px';
+  clr.onclick=()=>armButton(clr,'למחוק את כל הנתונים? לחץ שוב',()=>{ wlog=[]; LS.set('srp-log',wlog); renderReport(); });
+  s4.appendChild(clr);
+  B.appendChild(s4);
+}
 
 renderLibrary();
 </script>
