@@ -11,6 +11,7 @@
 <style>
 /* Layout: library of story cards → episode list → full-height reading card with controls docked below (landscape iPad first) */
 :root{
+  --gold:#c98a00; --gold-soft:#fff3c4;
   --bg:#eef1f6; --paper:#fffdf8; --ink:#1d2433; --muted:#6b7385;
   --accent:#d9481e; --accent-soft:#fde3d8; --done:#2f8f5b; --line:#d9dde6;
   --warn:#e8890c; --warn-soft:#fff0d6;
@@ -21,7 +22,7 @@
 @media (prefers-color-scheme:dark){
   :root{ --bg:#11151f; --paper:#1a2030; --ink:#eef0f5; --muted:#9aa3b8;
     --accent:#ff7a4d; --accent-soft:#4a2a20; --done:#5fd08f; --line:#2c3446;
-    --warn:#ffb340; --warn-soft:#3d2c10; color-scheme:dark; }
+    --warn:#ffb340; --warn-soft:#3d2c10; --gold:#ffcd4d; --gold-soft:#3a3010; color-scheme:dark; }
 }
 *{box-sizing:border-box}
 [hidden]{display:none!important}
@@ -100,6 +101,36 @@ footer.ctl{display:flex;align-items:center;gap:12px;padding-block:12px;flex-wrap
 .plist{display:flex;flex-direction:column;gap:10px}
 .empty{color:var(--muted);font-size:18px;padding:30px 0}
 
+/* challenge words + shelf */
+.w.chal{background:var(--gold-soft);box-shadow:0 .1em 0 var(--gold) inset,0 -.08em 0 var(--gold) inset;color:var(--ink)}
+.w.chal.cur{box-shadow:0 .12em 0 var(--accent),0 0 0 .08em var(--gold)}
+.w.won{color:var(--gold);font-weight:700}
+.prize{position:fixed;z-index:6;pointer-events:none;font-weight:800;font-size:28px;color:var(--gold);white-space:nowrap;animation:rise 1.6s ease-out forwards;text-shadow:0 1px 0 var(--paper)}
+@keyframes rise{0%{opacity:0;transform:translate(-50%,0) scale(.6)}20%{opacity:1;transform:translate(-50%,-20px) scale(1.1)}100%{opacity:0;transform:translate(-50%,-90px) scale(1)}}
+.bigprize{position:fixed;left:50%;top:38%;transform:translate(-50%,-50%);z-index:7;background:var(--paper);border:3px solid var(--gold);border-radius:24px;padding:22px 34px;text-align:center;pointer-events:none;animation:pop .5s ease-out}
+.bigprize b{display:block;font-size:40px;color:var(--gold)}
+.bigprize span{font-family:var(--story);font-size:34px}
+.stars{font-weight:800;color:var(--gold);font-variant-numeric:tabular-nums;font-size:20px;white-space:nowrap}
+.btn.gold{border-color:var(--gold)}
+.shelf-stats{display:grid;grid-template-columns:repeat(auto-fit,minmax(160px,1fr));gap:12px;max-width:1000px}
+.shelf-stats div{background:var(--paper);border:2px solid var(--line);border-radius:18px;padding:16px;text-align:center}
+.shelf-stats b{display:block;font-size:42px;font-weight:800;color:var(--accent);font-variant-numeric:tabular-nums}
+.shelf-stats div:nth-child(3) b{color:var(--gold)}
+.shelf-stats span{color:var(--muted);font-size:16px}
+.books{display:flex;flex-direction:column;gap:12px;max-width:1000px}
+.book{background:var(--paper);border:2px solid var(--line);border-radius:18px;padding:14px 18px}
+.book.complete{border-color:var(--done)}
+.book h4{margin:0 0 10px;font-size:20px;display:flex;gap:10px;align-items:center}
+.book h4 em{font-style:normal;font-size:15px;color:var(--done)}
+.eps-dots{display:flex;gap:8px;flex-wrap:wrap}
+.eps-dots span{border:2px solid var(--line);border-radius:12px;padding:6px 12px;font-size:16px;color:var(--muted)}
+.eps-dots span.done{background:var(--done);border-color:var(--done);color:#fff;font-weight:600}
+.wchips{display:flex;gap:10px;flex-wrap:wrap;max-width:1000px}
+.wchip{background:var(--gold-soft);border:2px solid var(--gold);border-radius:14px;padding:6px 14px;font-family:var(--story);font-size:26px;display:flex;align-items:center;gap:10px}
+.wchip i{font-style:normal;font-family:var(--ui);font-size:16px;letter-spacing:2px;color:var(--gold)}
+.wchip.mastered{background:transparent;border-color:var(--done);color:var(--done);font-size:22px}
+.epbtn .ok{font-size:15px;color:#fff;background:var(--done);border-radius:99px;padding:3px 10px;white-space:nowrap}
+
 /* report */
 .chips{display:flex;gap:8px}
 .chip{border:2px solid var(--line);background:var(--paper);border-radius:99px;padding:8px 16px;font-size:16px;font-weight:600}
@@ -146,6 +177,7 @@ footer.ctl{display:flex;align-items:center;gap:12px;padding-block:12px;flex-wrap
 <section class="screen" id="libScreen">
   <div class="top">
     <h2 class="brand">דף קריאה חכם<small>בוחרים סיפור, קוראים בקול, והמילה עוברת רק כשהיא נקראת נכון</small></h2>
+    <button class="btn gold" id="openShelf">המדף שלי <span class="stars" id="starsLib">⭐ 0</span></button>
     <button class="btn" id="openReport">דוח הורה</button>
     <button class="btn warn" id="openPractice">מילים לתרגול<span class="badge" id="pBadge1">0</span></button>
   </div>
@@ -176,6 +208,7 @@ footer.ctl{display:flex;align-items:center;gap:12px;padding-block:12px;flex-wrap
     <button class="btn" id="rdBack">→ פרקים</button>
     <div class="progress"><span id="paraNum"></span><div class="bar"><i id="barFill"></i></div></div>
     <span style="flex:1"></span>
+    <span class="stars" id="starsRd">⭐ 0</span>
     <button class="btn warn" id="rdPractice">לתרגול<span class="badge" id="pBadge2">0</span></button>
   </div>
   <main class="rd">
@@ -208,6 +241,15 @@ footer.ctl{display:flex;align-items:center;gap:12px;padding-block:12px;flex-wrap
     <p style="color:var(--muted);font-size:16px;margin:0 0 12px;max-width:900px">מילים שלא זוהו אחרי שני ניסיונות, ומילים שדילגו עליהן. "נקרא" מוריד את המילה מהרשימה. "זה היה נכון" מלמד את הדף שמה שנשמע הוא קריאה נכונה של המילה.</p>
     <div class="plist" id="pList"></div>
   </div>
+</section>
+
+<!-- ============ SHELF ============ -->
+<section class="screen" id="shScreen" hidden>
+  <div class="top">
+    <button class="btn" id="shBack">→ ספרייה</button>
+    <h2>המדף שלי</h2>
+  </div>
+  <div class="scroll" id="shBody"></div>
 </section>
 
 <!-- ============ REPORT ============ -->
@@ -262,6 +304,12 @@ const BUILTIN = [{"id": "ninjago-s5", "title": "נינג'גו – עונה 5", "
 const LS={get(k,d){try{const v=localStorage.getItem(k);return v?JSON.parse(v):d}catch(e){return d}},
           set(k,v){try{localStorage.setItem(k,JSON.stringify(v))}catch(e){}}};
 let userStories=LS.get('srp-stories',[]);
+let chal=LS.get('srp-chal',{});         // challenge words: key -> {text, got, loc}
+let mastered=LS.get('srp-mastered',{}); // key -> {text, t}
+let stars=LS.get('srp-stars',0);
+let doneEps=LS.get('srp-done',{});      // storyId -> [episode indexes finished]
+let wcount=LS.get('srp-wcount',0);      // words read correctly, ever
+const NEED=2;                           // correct readings later in the stories to conquer a challenge word
 let wlog=LS.get('srp-log',[]);           // [time, story, ep, para, wordIdx, key, text, kind, fails, ms]
 let learned=LS.get('srp-learned',{});     // wordKey -> [heard keys]
 let practice=LS.get('srp-practice',[]);   // {word,key,heard[],reason,loc:{s,e,p,i},t}
@@ -342,9 +390,9 @@ function matches(tok,word){
 }
 
 /* ---------- UI helpers ---------- */
-function show(id){ ['libScreen','epScreen','rdScreen','prScreen','rpScreen'].forEach(s=>$(s).hidden=(s!==id)); }
+function show(id){ ['libScreen','epScreen','rdScreen','prScreen','rpScreen','shScreen'].forEach(s=>$(s).hidden=(s!==id)); }
 let toastT; function toast(t){ const el=$('toast'); el.textContent=t; el.hidden=false; clearTimeout(toastT); toastT=setTimeout(()=>el.hidden=true,2600); }
-function badges(){ $('pBadge1').textContent=practice.length; $('pBadge2').textContent=practice.length; }
+function badges(){ $('pBadge1').textContent=practice.length; $('pBadge2').textContent=practice.length; $('starsLib').textContent='⭐ '+stars; $('starsRd').textContent='⭐ '+stars; }
 function armButton(btn,label,fn){ // two-tap confirm, no system dialogs
   if(btn.dataset.armed){ delete btn.dataset.armed; fn(); return; }
   const old=btn.textContent; btn.dataset.armed=1; btn.classList.add('armed'); btn.textContent=label;
@@ -390,6 +438,7 @@ function openStory(id){
     const b=document.createElement('button'); b.className='epbtn';
     b.innerHTML='<span class="num"></span><span class="t"></span>';
     b.querySelector('.num').textContent=ep.short; b.querySelector('.t').textContent=ep.title;
+    if((doneEps[id]||[]).includes(i)){ const k=document.createElement('span'); k.className='ok'; k.textContent='✓ קראתי'; b.appendChild(k); }
     if(pr && pr.ep===i){ const h=document.createElement('span'); h.className='here'; h.textContent='קטע '+(pr.para+1)+' ←'; b.appendChild(h); }
     b.onclick=()=>{ const p=progress[id]; if(p && p.ep===i){ cur.ep=i;cur.para=p.para;cur.word=p.word; } else { cur.ep=i;cur.para=0;cur.word=0; } openReader(); };
     list.appendChild(b);
@@ -412,6 +461,7 @@ function loadPara(){
   ep.paras[cur.para].split(/\s+/).filter(Boolean).forEach((t,i)=>{
     const sp=document.createElement('span'); sp.className='w'; sp.textContent=t;
     const key=norm(t); const w={el:sp,key,req:hasHeb(key),text:t,orange:oranges.has(i)};
+    w.chal=isChalHere(key,i)&&!w.orange;
     sp.onclick=()=>{ cur.word=i; skipNonReq(); resetTries(); paint(); saveProg(); };
     words.push(w); box.appendChild(sp); box.appendChild(document.createTextNode(' '));
   });
@@ -434,12 +484,43 @@ function logWord(i,kind){
   wlog.push([Date.now(),cur.story,cur.ep,cur.para,i,w.key,w.text.replace(/[.,!?:;"״()–—]/g,''),kind,fails,ms]);
   if(wlog.length>30000) wlog=wlog.slice(-30000);
   LS.set('srp-log',wlog);
+  if(kind==='ok'||kind==='retry') onCorrect(i);
+}
+function addStars(n){ stars+=n; LS.set('srp-stars',stars); badges(); }
+function floatPrize(el,text){
+  const r=el.getBoundingClientRect(); const d=document.createElement('div'); d.className='prize'; d.textContent=text;
+  d.style.left=(r.left+r.width/2)+'px'; d.style.top=(r.top-10)+'px'; document.body.appendChild(d); setTimeout(()=>d.remove(),1700);
+}
+function bigPrize(word){
+  const d=document.createElement('div'); d.className='bigprize';
+  d.innerHTML='<b>🏆 כבשת מילה!</b><span></span>'; d.querySelector('span').textContent=word;
+  document.body.appendChild(d); setTimeout(()=>d.remove(),2200);
+}
+function onCorrect(i){
+  const w=words[i]; wcount++; LS.set('srp-wcount',wcount);
+  if(!w.chal) return;
+  const c=chal[w.key]; if(!c) return;
+  c.got++; w.chal=false; w.won=true;
+  if(c.got>=NEED){
+    delete chal[w.key]; mastered[w.key]={text:c.text,t:Date.now()};
+    LS.set('srp-mastered',mastered); addStars(3); bigPrize(c.text);
+    words.forEach(x=>{ if(x.key===w.key) x.chal=false; });
+  } else {
+    addStars(1); floatPrize(w.el,'+⭐ מילת אתגר!');
+  }
+  LS.set('srp-chal',chal);
+}
+function isChalHere(key,i){
+  const c=chal[key]; if(!c) return false;
+  return !(c.loc && c.loc.s===cur.story && c.loc.e===cur.ep && c.loc.p===cur.para);  // only later, not where it was missed
 }
 function paint(){
   words.forEach((w,i)=>{
     let c='w';
     if(i<cur.word) c+= !w.req?' skip' : w.orange?' orange':' read';
     else if(w.orange && i!==cur.word) c+=' orange';
+    if(i>=cur.word && w.chal && !w.orange) c+=' chal';
+    if(i<cur.word && w.won) c+=' won';
     if(i===cur.word) c+=' cur';
     w.el.className=c;
   });
@@ -450,7 +531,10 @@ function markOrange(i,reason){
   const loc={s:cur.story,e:cur.ep,p:cur.para,i};
   practice=practice.filter(p=>!(p.loc.s===loc.s&&p.loc.e===loc.e&&p.loc.p===loc.p&&p.loc.i===loc.i));
   practice.push({word:w.text.replace(/[.,!?:;"״׳()–—]/g,''),key:w.key,heard:failHeard.slice(-3),reason,loc,t:Date.now()});
-  LS.set('srp-practice',practice); badges();
+  LS.set('srp-practice',practice);
+  if(!mastered[w.key]){ chal[w.key]={text:w.text.replace(/[.,!?:;"״׳()–—]/g,''),got:0,loc}; LS.set('srp-chal',chal); }
+  words.forEach(x=>{ if(x.key===w.key) x.chal=false; });
+  badges();
 }
 function advance(){
   cur.word++; skipNonReq(); resetTries(); paint(); saveProg();
@@ -463,7 +547,9 @@ function paraFinished(){
   $('barFill').style.width=((cur.para+1)/ep.paras.length*100)+'%';
   if(cur.para>=ep.paras.length-1){
     stopRec();
-    $('doneText').textContent='סיימת לקרוא את '+ep.short+(practice.length?'. יש '+practice.length+' מילים לתרגול.':'.');
+    const dl=doneEps[cur.story]||(doneEps[cur.story]=[]); const firstTime=!dl.includes(cur.ep);
+    if(firstTime){ dl.push(cur.ep); LS.set('srp-done',doneEps); addStars(5); }
+    $('doneText').textContent='סיימת לקרוא את '+ep.short+(firstTime?' וקיבלת 5 כוכבים ⭐':'')+'. הפרק נוסף למדף שלך.';
     const more=cur.ep<s.episodes.length-1;
     $('doneNext').hidden=!more;
     $('doneOverlay').hidden=false; finishing=false; return;
@@ -584,7 +670,7 @@ function renderPractice(){
     mk('🔊',null,()=>speak(p.word));
     if(p.heard&&p.heard.length) mk('זה היה נכון',null,()=>{
       const arr=learned[p.key]||[]; p.heard.map(norm).forEach(h=>{ if(h&&!arr.includes(h)) arr.push(h); }); learned[p.key]=arr;
-      LS.set('srp-learned',learned); removeP(p); toast('הדף למד: "'+p.heard.join(' / ')+'" = '+p.word);
+      LS.set('srp-learned',learned); if(chal[p.key]){ delete chal[p.key]; LS.set('srp-chal',chal); } removeP(p); toast('הדף למד: "'+p.heard.join(' / ')+'" = '+p.word);
     });
     mk('נקרא ✓','primary',()=>{ removeP(p); toast('הוסר מהרשימה'); });
     L.appendChild(r);
@@ -626,7 +712,7 @@ $('addSave').onclick=()=>{
 
 /* ---------- backup ---------- */
 $('dlBackup').onclick=()=>{
-  const data={app:'smart-reading-page',v:1,date:new Date().toISOString(),learned,practice,userStories,progress,log:wlog};
+  const data={app:'smart-reading-page',v:1,date:new Date().toISOString(),learned,practice,userStories,progress,log:wlog,chal,mastered,stars,doneEps,wcount};
   const blob=new Blob([JSON.stringify(data,null,1)],{type:'application/json'});
   const a=document.createElement('a'); a.href=URL.createObjectURL(blob);
   a.download='גיבוי-דף-קריאה-'+new Date().toISOString().slice(0,10)+'.json';
@@ -646,6 +732,11 @@ $('restoreFile').onchange=e=>{
       const lk=r=>r[0]+'/'+r[1]+'/'+r[4]; const hl=new Set(wlog.map(lk)); (d.log||[]).forEach(r=>{ if(!hl.has(lk(r))) wlog.push(r); }); wlog.sort((a,b)=>a[0]-b[0]); LS.set('srp-log',wlog);
       const have=new Set(practice.map(key)); (d.practice||[]).forEach(p=>{ if(!have.has(key(p))) practice.push(p); });
       progress=Object.assign({},d.progress||{},progress);
+      mastered=Object.assign({},d.mastered||{},mastered);
+      for(const k in (d.chal||{})) if(!chal[k]&&!mastered[k]) chal[k]=d.chal[k];
+      stars=Math.max(stars,d.stars||0); wcount=Math.max(wcount,d.wcount||0);
+      for(const sid in (d.doneEps||{})){ const a=doneEps[sid]||(doneEps[sid]=[]); d.doneEps[sid].forEach(x=>{ if(!a.includes(x)) a.push(x); }); }
+      LS.set('srp-mastered',mastered); LS.set('srp-chal',chal); LS.set('srp-stars',stars); LS.set('srp-wcount',wcount); LS.set('srp-done',doneEps);
       LS.set('srp-learned',learned); LS.set('srp-stories',userStories); LS.set('srp-practice',practice); LS.set('srp-progress',progress);
       renderLibrary(); toast('הגיבוי שוחזר');
     }catch(err){ toast('הקובץ הזה הוא לא גיבוי של דף הקריאה'); }
@@ -660,6 +751,47 @@ $('copyFixes').onclick=()=>{
   const fallback=()=>{ const ta=document.createElement('textarea'); ta.value=text; document.body.appendChild(ta); ta.select(); try{document.execCommand('copy'); toast('התיקונים הועתקו');}catch(e){toast('לא הצלחתי להעתיק');} ta.remove(); };
   if(navigator.clipboard&&navigator.clipboard.writeText) navigator.clipboard.writeText(text).then(()=>toast('התיקונים הועתקו. אפשר להדביק אותם לי בצ׳אט'),fallback); else fallback();
 };
+
+/* ---------- shelf (for the child) ---------- */
+$('openShelf').onclick=()=>{ stopRec(); renderShelf(); show('shScreen'); };
+$('shBack').onclick=renderLibrary;
+function renderShelf(){
+  const B=$('shBody'); B.innerHTML='';
+  const st=allStories();
+  const epsDone=st.reduce((n,s)=>n+(doneEps[s.id]||[]).filter(i=>i<s.episodes.length).length,0);
+  const storiesDone=st.filter(s=>s.episodes.every((_,i)=>(doneEps[s.id]||[]).includes(i))).length;
+  const stats=el('div','shelf-stats');
+  [[epsDone,'פרקים שקראתי'],[storiesDone,'סיפורים שסיימתי'],['⭐ '+stars,'כוכבים'],[wcount,'מילים שקראתי'],[Object.keys(mastered).length,'מילים שכבשתי 🏆']]
+    .forEach(([v,t])=>{ const d=el('div'); d.appendChild(el('b',null,String(v))); d.appendChild(el('span',null,t)); stats.appendChild(d); });
+  B.appendChild(stats);
+
+  const s1=el('div','rsec'); s1.appendChild(el('h3',null,'הסיפורים שלי'));
+  const books=el('div','books');
+  st.forEach(s=>{
+    const dl=doneEps[s.id]||[]; const all=s.episodes.every((_,i)=>dl.includes(i));
+    const b=el('div','book'+(all?' complete':''));
+    const h=el('h4',null,s.title); if(all) h.appendChild(el('em',null,'✓ סיימתי את כל הסיפור'));
+    b.appendChild(h);
+    const dots=el('div','eps-dots'); s.episodes.forEach((ep,i)=>dots.appendChild(el('span',dl.includes(i)?'done':'',(dl.includes(i)?'✓ ':'')+ep.short)));
+    b.appendChild(dots); books.appendChild(b);
+  });
+  s1.appendChild(books); B.appendChild(s1);
+
+  const s2=el('div','rsec'); s2.appendChild(el('h3',null,'מילות האתגר שלי'));
+  s2.appendChild(el('p','hint','מילים שהיה קשה לקרוא. כשהן מופיעות שוב בסיפור הן מסומנות בזהב. כל קריאה נכונה שלהן נותנת כוכב, ואחרי '+NEED+' קריאות נכונות המילה נכבשת ונותנת 3 כוכבים.'));
+  const keys=Object.keys(chal);
+  if(!keys.length) s2.appendChild(el('div','empty','אין כרגע מילות אתגר. כל הכבוד!'));
+  const wc=el('div','wchips');
+  keys.forEach(k=>{ const c=chal[k]; const ch=el('div','wchip'); ch.appendChild(el('span',null,c.text)); ch.appendChild(el('i',null,'★'.repeat(c.got)+'☆'.repeat(Math.max(0,NEED-c.got)))); wc.appendChild(ch); });
+  s2.appendChild(wc); B.appendChild(s2);
+
+  const mk=Object.keys(mastered);
+  if(mk.length){
+    const s3=el('div','rsec'); s3.appendChild(el('h3',null,'מילים שכבשתי 🏆'));
+    const mc=el('div','wchips'); mk.sort((a,b)=>mastered[b].t-mastered[a].t).forEach(k=>mc.appendChild(el('div','wchip mastered','✓ '+mastered[k].text)));
+    s3.appendChild(mc); B.appendChild(s3);
+  }
+}
 
 /* ---------- parent report ---------- */
 let rpDays=LS.get('srp-rpdays',7);
