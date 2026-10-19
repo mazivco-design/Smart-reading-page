@@ -70,11 +70,34 @@ button:focus-visible,input:focus-visible,textarea:focus-visible{outline:3px soli
 .progress{display:flex;align-items:center;gap:10px;font-size:15px;color:var(--muted);font-variant-numeric:tabular-nums;min-width:160px}
 .bar{width:160px;height:10px;background:var(--line);border-radius:99px;overflow:hidden}
 .bar i{display:block;height:100%;width:0;background:var(--done);transition:width .4s}
+
+.rdbody{flex:1;min-height:0;display:flex;flex-direction:column}
 main.rd{flex:1;min-height:0;display:flex;justify-content:center}
+.btn.progress{display:flex;align-items:center;gap:10px;font-size:16px;font-weight:600;color:var(--ink)}
+.navrow{display:contents}
+#prevPara{order:1} #hearBtn{order:2} #micBtn{order:3} #skipBtn{order:4} #nextPara{order:5} .heard{order:6} .status{order:7}
+/* landscape: controls in a column on the right (RTL start side) */
+@media (orientation:landscape) and (min-width:800px){
+  .rdbody{flex-direction:row;gap:16px}
+  footer.ctl{order:-1;flex:none;width:230px;flex-direction:column;flex-wrap:nowrap;justify-content:center;align-items:stretch;padding-block:0 12px;overflow-y:auto}
+  footer.ctl .btn{width:100%}
+  #hearBtn{order:1} #micBtn{order:2;align-self:center;width:104px;height:104px} #micBtn svg{width:46px;height:46px} #skipBtn{order:3}
+  .navrow{display:flex;gap:8px;order:4;margin-top:14px;width:100%}
+  footer.ctl .navrow .btn{width:auto;min-width:0}
+  .navrow .btn{flex:1;font-size:17px;padding:8px 6px;white-space:nowrap}
+  .navrow .lg{display:none}
+  .heard{order:5;max-width:none;min-width:0;width:100%;white-space:normal;text-align:center}
+  .status{order:6}
+}
+.pmap{display:grid;grid-template-columns:repeat(auto-fill,minmax(64px,1fr));gap:10px;margin:8px 0}
+.pm{position:relative;border:2px solid var(--line);background:var(--paper);border-radius:14px;height:60px;font-size:20px;font-weight:700;font-variant-numeric:tabular-nums}
+.pm.orange{background:var(--warn-soft);border-color:var(--warn);color:var(--warn)}
+.pm.cur{outline:3px solid var(--accent);outline-offset:2px}
+.pm i{position:absolute;top:-8px;left:-8px;font-style:normal;font-size:13px;min-width:22px;height:22px;line-height:22px;border-radius:99px;background:var(--warn);color:#fff}
 .card{width:100%;max-width:1100px;background:var(--paper);border-radius:22px;box-shadow:0 2px 0 var(--line);display:flex;flex-direction:column;min-height:0}
 .card h1{margin:0;padding:16px 28px 4px;font-size:20px;font-weight:800;color:var(--accent);text-wrap:balance}
 .card h1 small{display:block;font-size:15px;color:var(--muted);font-weight:400;margin-top:2px}
-.text{flex:1;min-height:0;overflow-y:auto;padding:8px 28px 28px;font-family:var(--story);font-size:clamp(28px,3.3vw,44px);line-height:2.15;font-weight:500}
+.text{flex:1;min-height:0;overflow-y:auto;padding:8px 28px 28px;font-family:var(--story);font-size:clamp(28px,4.2vmin,46px);line-height:2.15;font-weight:500}
 .w{display:inline-block;padding:0 .08em;border-radius:.25em;transition:background .15s,color .15s}
 .w.read{color:var(--done)}
 .w.orange{color:var(--warn);background:var(--warn-soft)}
@@ -87,7 +110,7 @@ footer.ctl{display:flex;align-items:center;gap:12px;padding-block:12px;flex-wrap
 .mic svg{width:38px;height:38px}
 .mic.on::after{content:"";position:absolute;inset:-8px;border-radius:50%;border:4px solid var(--accent);animation:pulse 1.4s infinite}
 @keyframes pulse{0%{opacity:.8;transform:scale(.92)}100%{opacity:0;transform:scale(1.25)}}
-.heard{flex:1;min-width:180px;max-width:340px;font-size:16px;color:var(--muted);min-height:1.4em;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.heard{flex:1 1 180px;min-width:180px;max-width:340px;font-size:16px;color:var(--muted);min-height:1.4em;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
 .heard b{color:var(--ink);font-weight:600}
 .status{font-size:15px;color:var(--muted);text-align:center;width:100%}
 .status.err{color:var(--accent);font-weight:600}
@@ -206,11 +229,12 @@ footer.ctl{display:flex;align-items:center;gap:12px;padding-block:12px;flex-wrap
 <section class="screen" id="rdScreen" hidden>
   <div class="top">
     <button class="btn" id="rdBack">→ פרקים</button>
-    <div class="progress"><span id="paraNum"></span><div class="bar"><i id="barFill"></i></div></div>
+    <button class="btn progress" id="mapBtn"><span id="paraNum"></span><div class="bar"><i id="barFill"></i></div><span class="badge" id="orangeParas" hidden>0</span></button>
     <span style="flex:1"></span>
     <span class="stars" id="starsRd">⭐ 0</span>
     <button class="btn warn" id="rdPractice">לתרגול<span class="badge" id="pBadge2">0</span></button>
   </div>
+  <div class="rdbody">
   <main class="rd">
     <article class="card">
       <h1 id="title"></h1>
@@ -218,16 +242,19 @@ footer.ctl{display:flex;align-items:center;gap:12px;padding-block:12px;flex-wrap
     </article>
   </main>
   <footer class="ctl">
-    <button class="btn" id="prevPara">→ קטע קודם</button>
     <button class="btn" id="hearBtn">🔊 שמע מילה</button>
     <button class="mic" id="micBtn" aria-label="התחל להקריא">
       <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><rect x="9" y="2" width="6" height="12" rx="3" fill="currentColor"/><path d="M5 11a7 7 0 0 0 14 0M12 18v4M8 22h8"/></svg>
     </button>
     <button class="btn" id="skipBtn">דלג על מילה</button>
-    <button class="btn" id="nextPara">קטע הבא ←</button>
+    <div class="navrow">
+      <button class="btn" id="prevPara">→ <span class="lg">קטע </span>קודם</button>
+      <button class="btn" id="nextPara"><span class="lg">קטע </span>הבא ←</button>
+    </div>
     <div class="heard" id="heard"></div>
     <div class="status" id="status">לחץ על המיקרופון ותתחיל לקרוא בקול את המילה המסומנת</div>
   </footer>
+  </div>
 </section>
 
 <!-- ============ PRACTICE ============ -->
@@ -291,6 +318,18 @@ footer.ctl{display:flex;align-items:center;gap:12px;padding-block:12px;flex-wrap
     <div class="row">
       <button class="btn primary" id="addSave">הוסף לספרייה</button>
       <button class="btn" id="addCancel">ביטול</button>
+    </div>
+  </div>
+</div>
+
+<div class="overlay" id="mapOverlay" hidden>
+  <div class="box">
+    <h2>מפת הקטעים</h2>
+    <p>לוחצים על קטע כדי לקרוא אותו. קטע כתום הוא קטע שיש בו מילים לתיקון – קוראים אותו שוב, וכל מילה כתומה שנקראת נכון הופכת לירוקה ונותנת כוכב.</p>
+    <div class="pmap" id="pmap"></div>
+    <div class="row">
+      <button class="btn warn" id="mapNextOrange">לקטע הכתום הראשון</button>
+      <button class="btn" id="mapClose">סגור</button>
     </div>
   </div>
 </div>
@@ -471,7 +510,7 @@ function loadPara(){
   if(cur.word>=words.length) cur.word=0;
   skipNonReq(); resetTries(); paint();
   $('prevPara').disabled=cur.para===0;
-  $('paraNum').textContent='קטע '+(cur.para+1)+' מתוך '+ep.paras.length;
+  $('paraNum').textContent='קטע '+(cur.para+1)+' מתוך '+ep.paras.length+' ▾'; updOrangeBadge();
   $('barFill').style.width=(cur.para/ep.paras.length*100)+'%';
   saveProg();
   if(listening) restartRec();   // fresh, light listening for every paragraph
@@ -487,6 +526,7 @@ function logWord(i,kind){
   wlog.push([Date.now(),cur.story,cur.ep,cur.para,i,w.key,w.text.replace(/[.,!?:;"״()–—]/g,''),kind,fails,ms]);
   if(wlog.length>30000) wlog=wlog.slice(-30000);
   LS.set('srp-log',wlog);
+  if((kind==='ok'||kind==='retry') && w.orange) fixOrange(i);
   if(kind==='ok'||kind==='retry') onCorrect(i);
 }
 function addStars(n){ stars+=n; LS.set('srp-stars',stars); badges(); }
@@ -498,6 +538,16 @@ function bigPrize(word){
   const d=document.createElement('div'); d.className='bigprize';
   d.innerHTML='<b>🏆 כבשת מילה!</b><span></span>'; d.querySelector('span').textContent=word;
   document.body.appendChild(d); setTimeout(()=>d.remove(),2200);
+}
+function orangeCounts(){   // paragraph index -> number of orange words, current episode
+  const c={}; practice.forEach(p=>{ if(p.loc.s===cur.story&&p.loc.e===cur.ep) c[p.loc.p]=(c[p.loc.p]||0)+1; }); return c;
+}
+function updOrangeBadge(){ const n=Object.keys(orangeCounts()).length; $('orangeParas').hidden=!n; $('orangeParas').textContent=n; }
+function fixOrange(i){
+  const w=words[i]; w.orange=false; w.fixed=true;
+  practice=practice.filter(p=>!(p.loc.s===cur.story&&p.loc.e===cur.ep&&p.loc.p===cur.para&&p.loc.i===i));
+  LS.set('srp-practice',practice); addStars(1); floatPrize(w.el,'תיקנת! +⭐'); updOrangeBadge();
+  if(!words.some(x=>x.orange)) setTimeout(()=>toast('כל המילים הכתומות בקטע תוקנו! 🎉'),600);
 }
 function onCorrect(i){
   const w=words[i]; wcount++; LS.set('srp-wcount',wcount);
@@ -656,6 +706,17 @@ let prReturn='libScreen';
 function openPractice(from){ stopRec(); prReturn=from; renderPractice(); show('prScreen'); }
 $('openPractice').onclick=()=>openPractice('libScreen');
 $('rdPractice').onclick=()=>openPractice('rdScreen');
+function gotoPara(p){ $('mapOverlay').hidden=true; cur.para=p; cur.word=0; loadPara(); }
+$('mapBtn').onclick=()=>{
+  const ep=story().episodes[cur.ep], oc=orangeCounts(), M=$('pmap'); M.innerHTML='';
+  ep.paras.forEach((_,i)=>{ const b=document.createElement('button'); b.className='pm'+(oc[i]?' orange':'')+(i===cur.para?' cur':'');
+    b.textContent=i+1; if(oc[i]){ const t=document.createElement('i'); t.textContent=oc[i]; b.appendChild(t); }
+    b.onclick=()=>gotoPara(i); M.appendChild(b); });
+  const firstO=Object.keys(oc).map(Number).sort((a,b)=>a-b)[0];
+  $('mapNextOrange').hidden=firstO==null; $('mapNextOrange').onclick=()=>gotoPara(firstO);
+  $('mapOverlay').hidden=false;
+};
+$('mapClose').onclick=()=>{ $('mapOverlay').hidden=true; };
 $('prBack').onclick=()=>{ if(prReturn==='rdScreen'){ show('rdScreen'); loadPara(); } else renderLibrary(); };
 $('prClear').onclick=function(){ if(!practice.length) return; armButton(this,'למחוק הכול? לחץ שוב',()=>{ practice=[]; LS.set('srp-practice',practice); renderPractice(); badges(); }); };
 function renderPractice(){
