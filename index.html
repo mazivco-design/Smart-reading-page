@@ -81,6 +81,12 @@ main.rd{flex:1;min-height:0;display:flex;justify-content:center}
 .pager{display:flex;align-items:center;justify-content:center;gap:12px;padding-bottom:10px}
 .pg{width:64px;height:52px;border-radius:16px;border:2px solid var(--line);background:var(--paper);font-size:26px;font-weight:800;color:var(--ink)}
 .pg:disabled{opacity:.35}
+.pager{flex-wrap:wrap}
+.fontctl{display:flex;gap:4px;margin-inline-start:16px;border:2px solid var(--line);border-radius:16px;padding:3px;background:var(--paper)}
+.fz{min-width:52px;height:42px;border:none;border-radius:12px;background:transparent;font-size:22px;font-weight:800;color:var(--ink)}
+.fz small{font-size:15px}
+.fz.auto{font-size:15px;font-weight:600;color:var(--muted);padding:0 10px}
+.fz.auto[aria-pressed="true"]{background:var(--ink);color:var(--paper)}
 .pagebtn{display:flex;align-items:center;gap:12px;border:2px solid var(--line);background:var(--paper);border-radius:16px;padding:8px 18px;min-height:52px;font-size:20px;font-weight:700;color:var(--ink);font-variant-numeric:tabular-nums}
 .pagebtn .bar{display:block;width:140px}
 .text .w{-webkit-touch-callout:none;cursor:pointer}
@@ -251,6 +257,11 @@ footer.ctl{display:flex;align-items:center;gap:12px;padding-block:12px;flex-wrap
     <button class="pg" id="prevPara" aria-label="הדף הקודם">→</button>
     <button class="pagebtn" id="mapBtn"><span id="paraNum"></span><span class="bar"><i id="barFill"></i></span><span class="badge" id="orangeParas" hidden>0</span></button>
     <button class="pg" id="nextPara" aria-label="הדף הבא">←</button>
+    <div class="fontctl" role="group" aria-label="גודל הטקסט">
+      <button class="fz" id="fzDown" aria-label="הקטן טקסט"><small>א</small>−</button>
+      <button class="fz auto" id="fzAuto">אוטומטי</button>
+      <button class="fz" id="fzUp" aria-label="הגדל טקסט">א+</button>
+    </div>
   </div>
   <div class="rdbody">
   <main class="rd">
@@ -680,12 +691,19 @@ function hearWord(i){
   setTimeout(()=>w.el.classList.remove('speaking'),2500);
 }
 /* auto-fit: largest font size where the whole page fits without scrolling */
+let fontPref=LS.get('srp-font','auto');   // 'auto' or a size in px
 function fitText(){
   const box=$('text'); if(!box||!box.clientHeight) return;
+  $('fzAuto').setAttribute('aria-pressed',fontPref==='auto');
+  if(fontPref!=='auto'){ box.style.fontSize=fontPref+'px'; return; }
   let lo=24, hi=88;
   for(let k=0;k<8;k++){ const mid=(lo+hi)/2; box.style.fontSize=mid+'px'; if(box.scrollHeight<=box.clientHeight+1) lo=mid; else hi=mid; }
   box.style.fontSize=Math.floor(lo)+'px';
 }
+function setFont(v){ fontPref=v; LS.set('srp-font',v); fitText(); paint(); }
+$('fzUp').onclick=()=>{ const c=parseFloat($('text').style.fontSize)||40; setFont(Math.min(110,Math.round(c+4))); };
+$('fzDown').onclick=()=>{ const c=parseFloat($('text').style.fontSize)||40; setFont(Math.max(20,Math.round(c-4))); };
+$('fzAuto').onclick=()=>setFont('auto');
 let fitT; window.addEventListener('resize',()=>{ clearTimeout(fitT); fitT=setTimeout(()=>{ if(!$('rdScreen').hidden){ fitText(); paint(); } },150); });
 let pressT=null, pressI=-1, pressed=false, menuI=-1;
 const textBox=$('text');
