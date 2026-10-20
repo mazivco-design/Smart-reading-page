@@ -596,7 +596,7 @@ function onCorrect(i){
   c.got++; w.chal=false; w.won=true;
   if(c.got>=NEED){
     delete chal[w.key]; mastered[w.key]={text:c.text,t:Date.now()};
-    LS.set('srp-mastered',mastered); addStars(3); bigPrize(c.text);
+    LS.set('srp-mastered',mastered); addStars(3);
     words.forEach(x=>{ if(x.key===w.key) x.chal=false; });
   } else {
     addStars(1); floatPrize(w.el,'+⭐ מילת אתגר!');
