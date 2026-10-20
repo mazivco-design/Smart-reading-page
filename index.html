@@ -90,6 +90,7 @@ main.rd{flex:1;min-height:0;display:flex;justify-content:center}
 .pagebtn{display:flex;align-items:center;gap:12px;border:2px solid var(--line);background:var(--paper);border-radius:16px;padding:8px 18px;min-height:52px;font-size:20px;font-weight:700;color:var(--ink);font-variant-numeric:tabular-nums}
 .pagebtn .bar{display:block;width:140px}
 .text .w{-webkit-touch-callout:none;cursor:pointer}
+.text .par{display:block;margin-bottom:.25em}
 .w.speaking{outline:3px solid var(--done);outline-offset:2px}
 .wordmenu{position:fixed;z-index:8;display:flex;flex-direction:column;gap:8px;background:var(--paper);border:2px solid var(--line);border-radius:18px;padding:10px;box-shadow:0 8px 30px rgba(0,0,0,.18)}
 .teachword{font-family:var(--story);font-size:54px;font-weight:700;color:var(--accent);margin:6px 0 10px}
@@ -530,7 +531,7 @@ function openStory(id){
     b.innerHTML='<span class="num"></span><span class="t"></span>';
     b.querySelector('.num').textContent=ep.short; b.querySelector('.t').textContent=ep.title;
     if((doneEps[id]||[]).includes(i)){ const k=document.createElement('span'); k.className='ok'; k.textContent='✓ קראתי'; b.appendChild(k); }
-    if(pr && pr.ep===i){ const h=document.createElement('span'); h.className='here'; h.textContent='קטע '+(pr.para+1)+' ←'; b.appendChild(h); }
+    if(pr && pr.ep===i){ const h=document.createElement('span'); h.className='here'; h.textContent='להמשיך ←'; b.appendChild(h); }
     b.onclick=()=>{ const p=progress[id]; if(p && p.ep===i){ cur.ep=i;cur.para=p.para;cur.word=p.word; } else { cur.ep=i;cur.para=0;cur.word=0; } openReader(); };
     list.appendChild(b);
   });
@@ -538,67 +539,115 @@ function openStory(id){
 }
 
 /* ---------- reader ---------- */
+// Position is kept as a paragraph anchor (cur.para / cur.word = paragraph + word in it), so it survives
+// any font size or page layout. Pages are built from the episode's words to fit the screen.
 let words=[], fails=0, failHeard=[], finishing=false;
+let flow=[], flowIx={}, pages=[], pageIdx=0, pos=0, flowEp='';
 function story(){ return findStory(cur.story); }
 function openReader(){ show('rdScreen'); badges(); loadPara(); }
-function saveProg(){ progress[cur.story]={ep:cur.ep,para:cur.para,word:cur.word}; LS.set('srp-progress',progress); }
+function saveProg(){
+  let a=words[pos];
+  if(!a){ const pg=pages[pageIdx]; a=(pg && flow[pg.end]) || flow[flow.length-1]; }
+  if(a){ cur.para=a.p; cur.word=a.i; }
+  progress[cur.story]={ep:cur.ep,para:cur.para,word:cur.word}; LS.set('srp-progress',progress);
+}
+function buildFlow(ep){
+  flow=[]; flowIx={};
+  ep.paras.forEach((t,p)=>t.split(/\s+/).filter(Boolean).forEach((x,i)=>{ flowIx[p+':'+i]=flow.length; flow.push({p,i,t:x}); }));
+}
+function renderRange(a,b){
+  const box=$('text'); box.innerHTML='';
+  let par=null, lastP=-1; const out=[];
+  for(let k=a;k<b;k++){
+    const f=flow[k];
+    if(f.p!==lastP){ par=document.createElement('div'); par.className='par'; box.appendChild(par); lastP=f.p; }
+    const sp=document.createElement('span'); sp.className='w'; sp.textContent=f.t;
+    par.appendChild(sp); par.appendChild(document.createTextNode(' '));
+    out.push(sp);
+  }
+  return out;
+}
+function fits(){ const box=$('text'); return box.scrollHeight<=box.clientHeight+1; }
+function paginate(){
+  pages=[];
+  if(fontPref==='auto'){   // one paragraph per page, font fills the page
+    let s=0; for(let k=1;k<=flow.length;k++){ if(k===flow.length||flow[k].p!==flow[k-1].p){ pages.push({start:s,end:k}); s=k; } }
+    return;
+  }
+  const box=$('text'); box.style.fontSize=fontPref+'px';
+  let s=0;
+  while(s<flow.length){
+    let lo=s+1, hi=flow.length;           // largest end that fits
+    renderRange(s,hi);
+    if(!fits()){
+      while(lo<hi){ const mid=Math.ceil((lo+hi)/2); renderRange(s,mid); if(fits()) lo=mid; else hi=mid-1; }
+      hi=lo;
+      // prefer to end the page at a paragraph or sentence end, if that keeps most of the page
+      if(hi<flow.length && flow[hi].i!==0){
+        for(let k=hi;k>s+Math.floor((hi-s)*0.6);k--){
+          if(flow[k].i===0 || /[.!?:][״"]?$/.test(flow[k-1].t)){ hi=k; break; }
+        }
+      }
+    }
+    pages.push({start:s,end:hi}); s=hi;
+  }
+}
 function loadPara(){
   const s=story(); const ep=s.episodes[cur.ep];
-  if(cur.para>=ep.paras.length) cur.para=ep.paras.length-1;
   const season=(norm(ep.sub||'').match(/\d+/)||[])[0];
   $('epLabel').textContent=(season?'עונה '+season+' · ':s.title+' · ')+ep.short;
   $('epName').textContent=ep.title;
-  const box=$('text'); box.innerHTML=''; words=[];
-  const oranges=new Set(practice.filter(p=>p.loc.s===cur.story&&p.loc.e===cur.ep&&p.loc.p===cur.para).map(p=>p.loc.i));
-  ep.paras[cur.para].split(/\s+/).filter(Boolean).forEach((t,i)=>{
-    const sp=document.createElement('span'); sp.className='w'; sp.textContent=t;
-    const key=norm(t); const w={el:sp,key,req:hasHeb(key),text:t,orange:oranges.has(i)};
-    w.chal=isChalHere(key,i)&&!w.orange;
-    sp.dataset.i=i;
-    words.push(w); box.appendChild(sp); box.appendChild(document.createTextNode(' '));
-  });
-  if(cur.word>=words.length) cur.word=0;
-  skipNonReq(); resetTries(); fitText(); paint();
-  $('prevPara').disabled=cur.para===0;
-  $('paraNum').textContent='דף '+(cur.para+1)+' מתוך '+ep.paras.length+' ▾'; updOrangeBadge();
-  $('nextPara').disabled=false;
-  $('barFill').style.width=(cur.para/ep.paras.length*100)+'%';
-  saveProg();
-  if(listening) restartRec();   // fresh, light listening for every paragraph
+  buildFlow(ep);
+  if(cur.para>=ep.paras.length){ cur.para=ep.paras.length-1; cur.word=0; }
+  paginate();
+  let k=flowIx[cur.para+':'+cur.word]; if(k==null) k=flowIx[cur.para+':0']||0;
+  pageIdx=Math.max(0,pages.findIndex(pg=>k>=pg.start&&k<pg.end)); pos=k-pages[pageIdx].start;
+  renderPage();
 }
-function skipNonReq(){ while(cur.word<words.length && !words[cur.word].req) cur.word++; }
+function renderPage(){
+  const pg=pages[pageIdx];
+  const els=renderRange(pg.start,pg.end);
+  const oranges=new Set(practice.filter(p=>p.loc.s===cur.story&&p.loc.e===cur.ep).map(p=>p.loc.p+':'+p.loc.i));
+  words=els.map((sp,j)=>{
+    const f=flow[pg.start+j]; const key=norm(f.t);
+    const w={el:sp,key,req:hasHeb(key),text:f.t,p:f.p,i:f.i,orange:oranges.has(f.p+':'+f.i)};
+    w.chal=isChalHere(key,f.p)&&!w.orange;
+    sp.dataset.i=j; return w;
+  });
+  if(pos>=words.length) pos=0;
+  if(fontPref==='auto') fitText(); else { $('text').style.fontSize=fontPref+'px'; $('fzAuto').setAttribute('aria-pressed','false'); }
+  skipNonReq(); resetTries(); paint();
+  $('prevPara').disabled=pageIdx===0;
+  $('paraNum').textContent='דף '+(pageIdx+1)+' מתוך '+pages.length+' ▾'; updOrangeBadge();
+  $('barFill').style.width=(pageIdx/pages.length*100)+'%';
+  saveProg();
+  if(listening) restartRec();   // fresh, light listening for every page
+}
+function skipNonReq(){ while(pos<words.length && !words[pos].req) pos++; }
 function nextReq(i){ let j=i+1; while(j<words.length && !words[j].req) j++; return j<words.length?j:-1; }
 function resetTries(){ fails=0; failHeard=[]; wordStart=Date.now(); }
 let wordStart=Date.now();
-// kind: 'ok' first try, 'retry' read after tries, 'miss' moved on after 2 tries, 'skip' skip button
+// kind: 'ok' first try, 'retry' read after tries, 'miss' moved on, 'skip' skip button
 function logWord(i,kind){
   const w=words[i]; if(!w||!w.req) return;
   const ms=listening?Date.now()-wordStart:null;
-  wlog.push([Date.now(),cur.story,cur.ep,cur.para,i,w.key,w.text.replace(/[.,!?:;"״()–—]/g,''),kind,fails,ms]);
+  wlog.push([Date.now(),cur.story,cur.ep,w.p,w.i,w.key,w.text.replace(/[.,!?:;"״()–—]/g,''),kind,fails,ms]);
   if(wlog.length>30000) wlog=wlog.slice(-30000);
   LS.set('srp-log',wlog);
   if((kind==='ok'||kind==='retry') && w.orange) fixOrange(i);
   if(kind==='ok'||kind==='retry') onCorrect(i);
 }
 function addStars(n){ stars+=n; LS.set('srp-stars',stars); badges(); }
-function floatPrize(el,text){
-  const r=el.getBoundingClientRect(); const d=document.createElement('div'); d.className='prize'; d.textContent=text;
-  d.style.left=(r.left+r.width/2)+'px'; d.style.top=(r.top-10)+'px'; document.body.appendChild(d); setTimeout(()=>d.remove(),1700);
-}
-function bigPrize(word){
-  const d=document.createElement('div'); d.className='bigprize';
-  d.innerHTML='<b>🏆 כבשת מילה!</b><span></span>'; d.querySelector('span').textContent=word;
-  document.body.appendChild(d); setTimeout(()=>d.remove(),2200);
-}
-function orangeCounts(){   // paragraph index -> number of orange words, current episode
-  const c={}; practice.forEach(p=>{ if(p.loc.s===cur.story&&p.loc.e===cur.ep) c[p.loc.p]=(c[p.loc.p]||0)+1; }); return c;
+function pageOf(p,i){ const k=flowIx[p+':'+i]; if(k==null) return -1; return pages.findIndex(pg=>k>=pg.start&&k<pg.end); }
+function orangeCounts(){   // page index -> number of orange words, current episode
+  const c={}; practice.forEach(p=>{ if(p.loc.s===cur.story&&p.loc.e===cur.ep){ const g=pageOf(p.loc.p,p.loc.i); if(g>=0) c[g]=(c[g]||0)+1; } }); return c;
 }
 function updOrangeBadge(){ const n=Object.keys(orangeCounts()).length; $('orangeParas').hidden=!n; $('orangeParas').textContent=n; }
 function fixOrange(i){
   const w=words[i]; w.orange=false; w.fixed=true;
-  practice=practice.filter(p=>!(p.loc.s===cur.story&&p.loc.e===cur.ep&&p.loc.p===cur.para&&p.loc.i===i));
+  practice=practice.filter(p=>!(p.loc.s===cur.story&&p.loc.e===cur.ep&&p.loc.p===w.p&&p.loc.i===w.i));
   LS.set('srp-practice',practice); addStars(1); updOrangeBadge();
-  if(!words.some(x=>x.orange)) setTimeout(()=>toast('כל המילים הכתומות בקטע תוקנו! 🎉'),600);
+  if(!words.some(x=>x.orange)) setTimeout(()=>toast('כל המילים הכתומות בדף תוקנו! 🎉'),600);
 }
 function onCorrect(i){
   const w=words[i]; wcount++; LS.set('srp-wcount',wcount);
@@ -614,25 +663,25 @@ function onCorrect(i){
   }
   LS.set('srp-chal',chal);
 }
-function isChalHere(key,i){
+function isChalHere(key,p){
   const c=chal[key]; if(!c) return false;
-  return !(c.loc && c.loc.s===cur.story && c.loc.e===cur.ep && c.loc.p===cur.para);  // only later, not where it was missed
+  return !(c.loc && c.loc.s===cur.story && c.loc.e===cur.ep && c.loc.p===p);  // only later, not where it was missed
 }
 function paint(){
   words.forEach((w,i)=>{
     let c='w';
-    if(i<cur.word) c+= !w.req?' skip' : w.orange?' orange':' read';
-    else if(w.orange && i!==cur.word) c+=' orange';
-    if(i>=cur.word && w.chal && !w.orange) c+=' chal';
-    if(i<cur.word && w.won) c+=' won';
-    if(i===cur.word) c+=' cur';
+    if(i<pos) c+= !w.req?' skip' : w.orange?' orange':' read';
+    else if(w.orange && i!==pos) c+=' orange';
+    if(i>=pos && w.chal && !w.orange) c+=' chal';
+    if(i<pos && w.won) c+=' won';
+    if(i===pos) c+=' cur';
     w.el.className=c;
   });
-  const w=words[cur.word]; if(w) w.el.scrollIntoView({block:'center',behavior:'smooth'});
+  const w=words[pos]; if(w && !fits()) w.el.scrollIntoView({block:'center',behavior:'smooth'});
 }
 function markOrange(i,reason){
   const w=words[i]; if(!w) return; w.orange=true;
-  const loc={s:cur.story,e:cur.ep,p:cur.para,i};
+  const loc={s:cur.story,e:cur.ep,p:w.p,i:w.i};
   practice=practice.filter(p=>!(p.loc.s===loc.s&&p.loc.e===loc.e&&p.loc.p===loc.p&&p.loc.i===loc.i));
   practice.push({word:w.text.replace(/[.,!?:;"״׳()–—]/g,''),key:w.key,heard:failHeard.slice(-3),reason,loc,t:Date.now()});
   LS.set('srp-practice',practice);
@@ -641,15 +690,16 @@ function markOrange(i,reason){
   badges();
 }
 function advance(){
-  cur.word++; skipNonReq(); resetTries(); paint(); saveProg();
+  pos++; skipNonReq(); resetTries(); paint(); saveProg();
   if(listening) setStatus('מקשיב… תקרא את המילה המסומנת');
-  if(cur.word>=words.length) paraFinished();
+  if(pos>=words.length) paraFinished();
 }
+function gotoPage(n){ $('mapOverlay').hidden=true; pageIdx=n; pos=0; renderPage(); }
 function paraFinished(){
   if(finishing) return; finishing=true;
   const s=story(), ep=s.episodes[cur.ep];
-  $('barFill').style.width=((cur.para+1)/ep.paras.length*100)+'%';
-  if(cur.para>=ep.paras.length-1){
+  $('barFill').style.width=((pageIdx+1)/pages.length*100)+'%';
+  if(pageIdx>=pages.length-1){
     stopRec();
     const dl=doneEps[cur.story]||(doneEps[cur.story]=[]); const firstTime=!dl.includes(cur.ep);
     if(firstTime){ dl.push(cur.ep); LS.set('srp-done',doneEps); addStars(5); }
@@ -660,17 +710,16 @@ function paraFinished(){
   }
   const d=document.createElement('div'); d.className='paraDone'; d.textContent='✓ יפה!';
   document.body.appendChild(d); setTimeout(()=>d.remove(),1200);
-  setTimeout(()=>{ cur.para++; cur.word=0; finishing=false; loadPara(); },1100);
+  setTimeout(()=>{ pageIdx++; pos=0; finishing=false; renderPage(); },1100);
 }
 $('doneNext').onclick=()=>{ $('doneOverlay').hidden=true; cur.ep++; cur.para=0; cur.word=0; loadPara(); };
 $('doneLib').onclick=()=>{ $('doneOverlay').hidden=true; renderLibrary(); };
-$('prevPara').onclick=()=>{ if(cur.para>0){cur.para--;cur.word=0;loadPara();} };
+$('prevPara').onclick=()=>{ if(pageIdx>0){ pageIdx--; pos=0; renderPage(); } };
 $('nextPara').onclick=()=>{
-  const ep=story().episodes[cur.ep];
-  if(cur.para<ep.paras.length-1){cur.para++;cur.word=0;loadPara();}
-  else { cur.word=words.length; paint(); paraFinished(); }
+  if(pageIdx<pages.length-1){ pageIdx++; pos=0; renderPage(); }
+  else { pos=words.length; paint(); paraFinished(); }
 };
-$('skipBtn').onclick=()=>{ if(cur.word<words.length){ logWord(cur.word,'skip'); markOrange(cur.word,'skip'); advance(); } };
+$('skipBtn').onclick=()=>{ if(pos<words.length){ logWord(pos,'skip'); markOrange(pos,'skip'); advance(); } };
 $('rdBack').onclick=()=>openStory(cur.story);
 $('epBack').onclick=renderLibrary;
 
@@ -700,11 +749,11 @@ function fitText(){
   for(let k=0;k<8;k++){ const mid=(lo+hi)/2; box.style.fontSize=mid+'px'; if(box.scrollHeight<=box.clientHeight+1) lo=mid; else hi=mid; }
   box.style.fontSize=Math.floor(lo)+'px';
 }
-function setFont(v){ fontPref=v; LS.set('srp-font',v); fitText(); paint(); }
+function setFont(v){ saveProg(); fontPref=v; LS.set('srp-font',v); loadPara(); }
 $('fzUp').onclick=()=>{ const c=parseFloat($('text').style.fontSize)||40; setFont(Math.min(110,Math.round(c+4))); };
 $('fzDown').onclick=()=>{ const c=parseFloat($('text').style.fontSize)||40; setFont(Math.max(20,Math.round(c-4))); };
 $('fzAuto').onclick=()=>setFont('auto');
-let fitT; window.addEventListener('resize',()=>{ clearTimeout(fitT); fitT=setTimeout(()=>{ if(!$('rdScreen').hidden){ fitText(); paint(); } },150); });
+let fitT; window.addEventListener('resize',()=>{ clearTimeout(fitT); fitT=setTimeout(()=>{ if(!$('rdScreen').hidden){ saveProg(); loadPara(); } },150); });
 let pressT=null, pressI=-1, pressed=false, menuI=-1;
 const textBox=$('text');
 textBox.addEventListener('pointerdown',e=>{
@@ -727,7 +776,7 @@ function openWordMenu(i,sp){
   clearTimeout(menuHideT); menuHideT=setTimeout(()=>{ m.hidden=true; },5000);
 }
 document.addEventListener('pointerdown',e=>{ if(!$('wordMenu').hidden && !e.target.closest('#wordMenu')) $('wordMenu').hidden=true; },true);
-function startFrom(i){ $('wordMenu').hidden=true; cur.word=i; skipNonReq(); resetTries(); paint(); saveProg(); }
+function startFrom(i){ $('wordMenu').hidden=true; pos=i; skipNonReq(); resetTries(); paint(); saveProg(); }
 let menuHideT; $('wmStart').onclick=()=>{ $('wordMenu').hidden=true; hearWord(menuI); };
 $('wmTeach').onclick=()=>{ $('wordMenu').hidden=true; openTeach(menuI); };
 
@@ -770,7 +819,7 @@ $('teachDone').onclick=()=>{
 const SR=window.SpeechRecognition||window.webkitSpeechRecognition;
 let rec=null, listening=false, consumed=0, wakeLock=null, restartT=null;
 function setStatus(t,cls){ const s=$('status'); s.textContent=t; s.className='status'+(cls?' '+cls:''); }
-function flashMiss(){ const w=words[cur.word]; if(!w) return; w.el.classList.remove('miss'); void w.el.offsetWidth; w.el.classList.add('miss'); }
+function flashMiss(){ const w=words[pos]; if(!w) return; w.el.classList.remove('miss'); void w.el.offsetWidth; w.el.classList.add('miss'); }
 function showTries(){
   if(fails>=1) setStatus('לא זוהה. נסה שוב, או המשך לקרוא','try');
 }
@@ -782,15 +831,15 @@ function onResult(e){
   }
   $('heard').innerHTML='שמעתי: <b></b>'; $('heard').querySelector('b').textContent=toks.slice(-5).map(t=>t.raw).join(' ');
   let i=Math.min(consumed,toks.length);
-  while(i<toks.length && cur.word<words.length && !finishing){
-    const tk=toks[i], w=words[cur.word];
+  while(i<toks.length && pos<words.length && !finishing){
+    const tk=toks[i], w=words[pos];
     if(!tk.k){ i++; consumed=i; continue; }
-    if(matches(tk.k,w.key)){ logWord(cur.word,fails?'retry':'ok'); i++; consumed=i; advance(); continue; }
-    if(i+1<toks.length && matches(tk.k+toks[i+1].k,w.key)){ logWord(cur.word,fails?'retry':'ok'); i+=2; consumed=i; advance(); continue; }
-    if(i+2<toks.length && matches(tk.k+toks[i+1].k+toks[i+2].k,w.key)){ logWord(cur.word,fails?'retry':'ok'); i+=3; consumed=i; advance(); continue; }
-    const nx=nextReq(cur.word);
+    if(matches(tk.k,w.key)){ logWord(pos,fails?'retry':'ok'); i++; consumed=i; advance(); continue; }
+    if(i+1<toks.length && matches(tk.k+toks[i+1].k,w.key)){ logWord(pos,fails?'retry':'ok'); i+=2; consumed=i; advance(); continue; }
+    if(i+2<toks.length && matches(tk.k+toks[i+1].k+toks[i+2].k,w.key)){ logWord(pos,fails?'retry':'ok'); i+=3; consumed=i; advance(); continue; }
+    const nx=nextReq(pos);
     if(nx>=0 && matches(tk.k,words[nx].key)){   // the next word was read correctly: move on, current word turns orange
-      logWord(cur.word,'miss'); markOrange(cur.word,'miss'); cur.word=nx; resetTries(); logWord(nx,'ok'); i++; consumed=i; advance(); continue;
+      logWord(pos,'miss'); markOrange(pos,'miss'); pos=nx; resetTries(); logWord(nx,'ok'); i++; consumed=i; advance(); continue;
     }
     const settled=tk.fin || i<toks.length-1;
     if(settled){ fails++; failHeard.push(tk.raw); i++; consumed=i; flashMiss(); showTries(); continue; }
@@ -834,14 +883,13 @@ let prReturn='libScreen';
 function openPractice(from){ stopRec(); prReturn=from; renderPractice(); show('prScreen'); }
 $('openPractice').onclick=()=>openPractice('libScreen');
 $('rdPractice').onclick=()=>openPractice('rdScreen');
-function gotoPara(p){ $('mapOverlay').hidden=true; cur.para=p; cur.word=0; loadPara(); }
 $('mapBtn').onclick=()=>{
   const ep=story().episodes[cur.ep], oc=orangeCounts(), M=$('pmap'); M.innerHTML='';
-  ep.paras.forEach((_,i)=>{ const b=document.createElement('button'); b.className='pm'+(oc[i]?' orange':'')+(i===cur.para?' cur':'');
+  pages.forEach((_,i)=>{ const b=document.createElement('button'); b.className='pm'+(oc[i]?' orange':'')+(i===pageIdx?' cur':'');
     b.textContent=i+1; if(oc[i]){ const t=document.createElement('i'); t.textContent=oc[i]; b.appendChild(t); }
-    b.onclick=()=>gotoPara(i); M.appendChild(b); });
+    b.onclick=()=>gotoPage(i); M.appendChild(b); });
   const firstO=Object.keys(oc).map(Number).sort((a,b)=>a-b)[0];
-  $('mapNextOrange').hidden=firstO==null; $('mapNextOrange').onclick=()=>gotoPara(firstO);
+  $('mapNextOrange').hidden=firstO==null; $('mapNextOrange').onclick=()=>gotoPage(firstO);
   $('mapOverlay').hidden=false;
 };
 $('mapClose').onclick=()=>{ $('mapOverlay').hidden=true; };
