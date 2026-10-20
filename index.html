@@ -347,7 +347,7 @@ footer.ctl{display:flex;align-items:center;gap:12px;padding-block:12px;flex-wrap
 </div>
 
 <div class="wordmenu" id="wordMenu" hidden>
-  <button class="btn" id="wmStart">▶ להתחיל לקרוא מכאן</button>
+  <button class="btn" id="wmStart">🔊 לשמוע שוב</button>
   <button class="btn" id="wmTeach">🎙 ללמד את המילה</button>
 </div>
 
@@ -692,11 +692,11 @@ const textBox=$('text');
 textBox.addEventListener('pointerdown',e=>{
   const sp=e.target.closest('.w'); if(!sp) return;
   pressI=+sp.dataset.i; pressed=false; clearTimeout(pressT);
-  pressT=setTimeout(()=>{ pressed=true; openWordMenu(pressI,sp); },550);
+  pressT=setTimeout(()=>{ pressed=true; hearWord(pressI); openWordMenu(pressI,sp); },500);
 });
 ['pointerup','pointercancel','pointerleave'].forEach(t=>textBox.addEventListener(t,e=>{
   clearTimeout(pressT);
-  if(t==='pointerup' && !pressed && pressI>=0 && e.target.closest('.w')) hearWord(pressI);
+  if(t==='pointerup' && !pressed && pressI>=0 && e.target.closest('.w')) startFrom(pressI);
   pressI=-1;
 }));
 textBox.addEventListener('contextmenu',e=>e.preventDefault());
@@ -706,9 +706,11 @@ function openWordMenu(i,sp){
   let x=Math.min(Math.max(8,r.left+r.width/2-mw/2),innerWidth-mw-8), y=r.bottom+8;
   if(y+mh>innerHeight-8) y=r.top-mh-8;
   m.style.left=x+'px'; m.style.top=y+'px';
+  clearTimeout(menuHideT); menuHideT=setTimeout(()=>{ m.hidden=true; },5000);
 }
 document.addEventListener('pointerdown',e=>{ if(!$('wordMenu').hidden && !e.target.closest('#wordMenu')) $('wordMenu').hidden=true; },true);
-$('wmStart').onclick=()=>{ $('wordMenu').hidden=true; cur.word=menuI; skipNonReq(); resetTries(); paint(); saveProg(); };
+function startFrom(i){ $('wordMenu').hidden=true; cur.word=i; skipNonReq(); resetTries(); paint(); saveProg(); }
+let menuHideT; $('wmStart').onclick=()=>{ $('wordMenu').hidden=true; hearWord(menuI); };
 $('wmTeach').onclick=()=>{ $('wordMenu').hidden=true; openTeach(menuI); };
 
 /* ---------- teach a word by recording it ---------- */
