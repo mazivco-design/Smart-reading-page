@@ -586,7 +586,7 @@ function updOrangeBadge(){ const n=Object.keys(orangeCounts()).length; $('orange
 function fixOrange(i){
   const w=words[i]; w.orange=false; w.fixed=true;
   practice=practice.filter(p=>!(p.loc.s===cur.story&&p.loc.e===cur.ep&&p.loc.p===cur.para&&p.loc.i===i));
-  LS.set('srp-practice',practice); addStars(1); floatPrize(w.el,'תיקנת! +⭐'); updOrangeBadge();
+  LS.set('srp-practice',practice); addStars(1); updOrangeBadge();
   if(!words.some(x=>x.orange)) setTimeout(()=>toast('כל המילים הכתומות בקטע תוקנו! 🎉'),600);
 }
 function onCorrect(i){
@@ -599,7 +599,7 @@ function onCorrect(i){
     LS.set('srp-mastered',mastered); addStars(3);
     words.forEach(x=>{ if(x.key===w.key) x.chal=false; });
   } else {
-    addStars(1); floatPrize(w.el,'+⭐ מילת אתגר!');
+    addStars(1);
   }
   LS.set('srp-chal',chal);
 }
