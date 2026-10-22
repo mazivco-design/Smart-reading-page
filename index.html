@@ -203,6 +203,18 @@ footer.ctl{display:flex;flex-direction:column;align-items:center;gap:10px;paddin
 .quizcard.full{border-color:var(--gold)} .quizcard.full .qs{color:var(--gold);font-weight:700}
 .epbtn .quizb{font-size:15px;font-weight:700;border:2px solid var(--warn);color:var(--warn);border-radius:99px;padding:3px 12px;white-space:nowrap;background:var(--paper)}
 
+/* error flags */
+.w.flagged{text-decoration:underline wavy #d33;text-decoration-thickness:2px;text-underline-offset:.2em}
+.flagctx{font-family:var(--story);font-size:24px;line-height:1.8;background:var(--bg);border-radius:14px;padding:12px 16px}
+.flagctx b{color:#d33;text-decoration:underline wavy #d33}
+.flaglist{display:flex;flex-direction:column;gap:10px;max-height:55vh;overflow-y:auto}
+.flagitem{display:flex;gap:10px;align-items:flex-start;border:2px solid var(--line);border-radius:14px;padding:10px 12px}
+.flagitem div{flex:1;min-width:0}
+.flagitem small{display:block;color:var(--muted);font-size:14px}
+.flagitem .fw{font-family:var(--story);font-size:24px;font-weight:700;color:#d33}
+.flagitem .fn{font-size:16px}
+.flagitem .fs{font-family:var(--story);font-size:17px;color:var(--muted)}
+
 /* report */
 .chips{display:flex;gap:8px}
 .chip{border:2px solid var(--line);background:var(--paper);border-radius:99px;padding:8px 16px;font-size:16px;font-weight:600}
@@ -260,6 +272,7 @@ footer.ctl{display:flex;flex-direction:column;align-items:center;gap:10px;paddin
       <button class="btn" id="dlBackup">הורד קובץ גיבוי</button>
       <button class="btn" id="restoreBtn">שחזר מקובץ גיבוי</button>
       <button class="btn" id="copyFixes">העתק תיקוני זיהוי לשליחה</button>
+      <button class="btn" id="openFlags">🚩 טעויות שסימנתי <span class="badge" id="flagCount">0</span></button>
       <input type="file" id="restoreFile" accept=".json,application/json" hidden>
     </div>
   </div>
@@ -403,6 +416,33 @@ footer.ctl{display:flex;flex-direction:column;align-items:center;gap:10px;paddin
 <div class="wordmenu" id="wordMenu" hidden>
   <button class="btn" id="wmStart">🔊 לשמוע שוב</button>
   <button class="btn" id="wmTeach">🎙 ללמד את המילה</button>
+  <button class="btn" id="wmFlag">🚩 יש כאן טעות</button>
+</div>
+
+<div class="overlay" id="flagOverlay" hidden>
+  <div class="box">
+    <h2>🚩 סימון טעות</h2>
+    <p>המילה תישמר ברשימה, יחד עם המשפט שבו היא מופיעה. אחר כך אפשר להעתיק את כל הרשימה ולשלוח לי.</p>
+    <div class="flagctx" id="flagCtx"></div>
+    <label for="flagNote">מה לדעתך הטעות? (לא חובה)</label>
+    <input type="text" id="flagNote" placeholder="למשל: צריך להיות תמנון">
+    <div class="row">
+      <button class="btn primary" id="flagSave">שמור</button>
+      <button class="btn" id="flagCancel">ביטול</button>
+    </div>
+  </div>
+</div>
+
+<div class="overlay" id="flagsOverlay" hidden>
+  <div class="box">
+    <h2>🚩 טעויות שסימנתי</h2>
+    <div class="flaglist" id="flagList"></div>
+    <div class="row">
+      <button class="btn primary" id="flagsCopy">העתק הכול לשליחה</button>
+      <button class="btn" id="flagsClear">נקה רשימה</button>
+      <button class="btn" id="flagsClose">סגור</button>
+    </div>
+  </div>
 </div>
 
 <div class="overlay" id="teachOverlay" hidden>
@@ -428,6 +468,7 @@ const BUILTIN = [{"id": "ninjago-s5", "title": "נינג'גו – עונה 5", "
 const LS={get(k,d){try{const v=localStorage.getItem(k);return v?JSON.parse(v):d}catch(e){return d}},
           set(k,v){try{localStorage.setItem(k,JSON.stringify(v))}catch(e){}}};
 let userStories=LS.get('srp-stories',[]);
+let flags=LS.get('srp-flags',[]);   // words marked as a mistake in the text: {s,e,p,i,word,sentence,note,t}
 let chal=LS.get('srp-chal',{});         // challenge words: key -> {text, got, loc}
 let mastered=LS.get('srp-mastered',{}); // key -> {text, t}
 let stars=LS.get('srp-stars',0);
@@ -546,7 +587,7 @@ function matches(tok,word){
 /* ---------- UI helpers ---------- */
 function show(id){ ['libScreen','epScreen','rdScreen','prScreen','rpScreen','shScreen','qzScreen'].forEach(s=>$(s).hidden=(s!==id)); }
 let toastT; function toast(t){ const el=$('toast'); el.textContent=t; el.hidden=false; clearTimeout(toastT); toastT=setTimeout(()=>el.hidden=true,2600); }
-function badges(){ $('pBadge1').textContent=practice.length; $('pBadge2').textContent=practice.length; $('starsLib').textContent='⭐ '+stars; $('starsRd').textContent='⭐ '+stars; }
+function badges(){ $('flagCount').textContent=flags.length; $('pBadge1').textContent=practice.length; $('pBadge2').textContent=practice.length; $('starsLib').textContent='⭐ '+stars; $('starsRd').textContent='⭐ '+stars; }
 function armButton(btn,label,fn){ // two-tap confirm, no system dialogs
   if(btn.dataset.armed){ delete btn.dataset.armed; fn(); return; }
   const old=btn.textContent; btn.dataset.armed=1; btn.classList.add('armed'); btn.textContent=label;
@@ -684,6 +725,7 @@ function renderPage(){
     const f=flow[pg.start+j]; const key=norm(f.t);
     const w={el:sp,key,req:hasHeb(key),text:f.t,p:f.p,i:f.i,orange:oranges.has(f.p+':'+f.i)};
     w.chal=isChalHere(key,f.p)&&!w.orange;
+    if(flags.some(g=>g.s===cur.story&&g.e===cur.ep&&g.p===f.p&&g.i===f.i)) sp.classList.add('flagged');
     sp.dataset.i=j; return w;
   });
   if(pos>=words.length) pos=0;
@@ -745,6 +787,7 @@ function paint(){
     if(i<pos) c+= !w.req?' skip' : w.orange?' orange':' read';
     else if(w.orange && i!==pos) c+=' orange';
     if(i===pos) c+=' cur';
+    if(w.el.classList.contains('flagged')) c+=' flagged';
     w.el.className=c;
   });
   const w=words[pos]; if(w && !fits()) w.el.scrollIntoView({block:'center',behavior:'smooth'});
@@ -854,6 +897,52 @@ document.addEventListener('pointerdown',e=>{ if(!$('wordMenu').hidden && !e.targ
 function startFrom(i){ $('wordMenu').hidden=true; pos=i; skipNonReq(); resetTries(); paint(); saveProg(); }
 let menuHideT; $('wmStart').onclick=()=>{ $('wordMenu').hidden=true; hearWord(menuI); };
 $('wmTeach').onclick=()=>{ $('wordMenu').hidden=true; openTeach(menuI); };
+
+/* ---------- flag a word that looks wrong in the text, to send for checking ---------- */
+let flagW=null;
+function updFlagCount(){ $('flagCount').textContent=flags.length; }
+function sentenceOf(w){
+  const ep=story().episodes[cur.ep]; const t=ep.paras[w.p].split(/\s+/).filter(Boolean);
+  let a=w.i, b=w.i; while(a>0 && !/[.!?:]["״]?$/.test(t[a-1])) a--; while(b<t.length-1 && !/[.!?:]["״]?$/.test(t[b])) b++;
+  return {before:t.slice(a,w.i).join(' '), word:t[w.i], after:t.slice(w.i+1,b+1).join(' ')};
+}
+$('wmFlag').onclick=()=>{
+  $('wordMenu').hidden=true; const w=words[menuI]; if(!w) return;
+  flagW=w; const sn=sentenceOf(w); const c=$('flagCtx'); c.innerHTML='';
+  c.appendChild(document.createTextNode(sn.before+' ')); const b=document.createElement('b'); b.textContent=sn.word; c.appendChild(b); c.appendChild(document.createTextNode(' '+sn.after));
+  $('flagNote').value=''; $('flagOverlay').hidden=false;
+};
+$('flagCancel').onclick=()=>{ $('flagOverlay').hidden=true; };
+$('flagSave').onclick=()=>{
+  const w=flagW; if(!w) return; const sn=sentenceOf(w);
+  flags=flags.filter(f=>!(f.s===cur.story&&f.e===cur.ep&&f.p===w.p&&f.i===w.i));
+  flags.push({s:cur.story,e:cur.ep,p:w.p,i:w.i,word:sn.word,sentence:(sn.before+' '+sn.word+' '+sn.after).trim(),note:$('flagNote').value.trim(),t:Date.now()});
+  LS.set('srp-flags',flags); updFlagCount(); w.el.classList.add('flagged');
+  $('flagOverlay').hidden=true; toast('נשמר ברשימת הטעויות 🚩');
+};
+function flagPlace(f){ const st=findStory(f.s); const ep=st&&st.episodes[f.e]; return (st?st.title:'')+(ep?' · '+ep.short+' "'+ep.title+'"':'')+' · קטע '+(f.p+1); }
+function renderFlags(){
+  const L=$('flagList'); L.innerHTML='';
+  if(!flags.length){ L.appendChild(el('div','empty','עוד לא סימנת טעויות. לחיצה ארוכה על מילה בסיפור ← "🚩 יש כאן טעות".')); return; }
+  flags.forEach(f=>{
+    const it=el('div','flagitem'); const d=el('div');
+    d.appendChild(el('span','fw',f.word)); d.appendChild(el('small',null,flagPlace(f)));
+    if(f.note) d.appendChild(el('div','fn','הערה: '+f.note));
+    d.appendChild(el('div','fs',f.sentence));
+    it.appendChild(d);
+    const x=el('button','btn','מחק'); x.onclick=()=>{ flags=flags.filter(g=>g!==f); LS.set('srp-flags',flags); updFlagCount(); renderFlags(); }; it.appendChild(x);
+    L.appendChild(it);
+  });
+}
+$('openFlags').onclick=()=>{ renderFlags(); $('flagsOverlay').hidden=false; };
+$('flagsClose').onclick=()=>{ $('flagsOverlay').hidden=true; };
+$('flagsClear').onclick=function(){ if(!flags.length) return; armButton(this,'למחוק הכול? לחץ שוב',()=>{ flags=[]; LS.set('srp-flags',flags); updFlagCount(); renderFlags(); }); };
+$('flagsCopy').onclick=()=>{
+  if(!flags.length){ toast('הרשימה ריקה'); return; }
+  const text='טעויות שסימנתי בסיפורים:\n'+flags.map((f,k)=>(k+1)+'. '+flagPlace(f)+'\n   מילה: '+f.word+(f.note?'\n   הערה: '+f.note:'')+'\n   משפט: '+f.sentence).join('\n');
+  const fallback=()=>{ const ta=document.createElement('textarea'); ta.value=text; document.body.appendChild(ta); ta.select(); try{document.execCommand('copy'); toast('הועתק. אפשר להדביק לי בצ׳אט');}catch(e){toast('לא הצלחתי להעתיק');} ta.remove(); };
+  if(navigator.clipboard&&navigator.clipboard.writeText) navigator.clipboard.writeText(text).then(()=>toast('הועתק. אפשר להדביק לי בצ׳אט'),fallback); else fallback();
+};
 
 /* ---------- teach a word by recording it ---------- */
 let teachI=-1, teachRec=null, teachWasOn=false;
@@ -1069,7 +1158,7 @@ $('addSave').onclick=()=>{
 
 /* ---------- backup ---------- */
 $('dlBackup').onclick=()=>{
-  const data={app:'smart-reading-page',v:1,epv:2,date:new Date().toISOString(),learned,practice,userStories,progress,log:wlog,chal,mastered,stars,doneEps,wcount,quizBest};
+  const data={app:'smart-reading-page',v:1,epv:2,date:new Date().toISOString(),learned,practice,userStories,progress,log:wlog,chal,mastered,stars,doneEps,wcount,quizBest,flags};
   const blob=new Blob([JSON.stringify(data,null,1)],{type:'application/json'});
   const a=document.createElement('a'); a.href=URL.createObjectURL(blob);
   a.download='גיבוי-דף-קריאה-'+new Date().toISOString().slice(0,10)+'.json';
