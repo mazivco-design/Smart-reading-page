@@ -194,6 +194,13 @@ footer.ctl{display:flex;flex-direction:column;align-items:center;gap:10px;paddin
 .qend{text-align:center;background:var(--paper);border-radius:22px;padding:30px 20px}
 .qend b{display:block;font-size:56px;color:var(--done);font-variant-numeric:tabular-nums}
 .qend p{font-size:20px;color:var(--muted);margin:8px 0 20px}
+.eprow{display:flex;gap:12px;align-items:stretch}
+.eprow .epbtn{flex:1;min-width:0}
+.quizcard{flex:none;width:118px;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:2px;border:2px solid var(--line);background:var(--paper);border-radius:18px;padding:8px;color:var(--ink)}
+.quizcard .qi{font-size:24px;line-height:1}
+.quizcard .ql{font-size:17px;font-weight:700;color:var(--accent)}
+.quizcard .qs{font-size:14px;color:var(--muted);font-variant-numeric:tabular-nums;min-height:1.2em}
+.quizcard.full{border-color:var(--gold)} .quizcard.full .qs{color:var(--gold);font-weight:700}
 .epbtn .quizb{font-size:15px;font-weight:700;border:2px solid var(--warn);color:var(--warn);border-radius:99px;padding:3px 12px;white-space:nowrap;background:var(--paper)}
 
 /* report */
@@ -359,7 +366,7 @@ footer.ctl{display:flex;flex-direction:column;align-items:center;gap:10px;paddin
     <p id="doneText"></p>
     <div class="row" style="justify-content:center">
       <button class="btn primary" id="doneNext">לפרק הבא</button>
-      <button class="btn warn" id="doneQuiz">📝 למבחן על הפרק</button>
+      <button class="btn warn" id="doneQuiz">🧩 לחידון על הפרק</button>
       <button class="btn" id="doneLib">לספרייה</button>
     </div>
   </div>
@@ -587,11 +594,18 @@ function openStory(id){
     b.querySelector('.num').textContent=ep.short; b.querySelector('.t').textContent=ep.title;
     if((doneEps[id]||[]).includes(i)){ const k=document.createElement('span'); k.className='ok'; k.textContent='✓ קראתי'; b.appendChild(k); }
     if(pr && pr.ep===i){ const h=document.createElement('span'); h.className='here'; h.textContent='להמשיך ←'; b.appendChild(h); }
-    if(ep.quiz && ep.quiz.length){ const q=document.createElement('span'); q.className='quizb'; q.setAttribute('role','button');
-      const best=(quizBest[id]||{})[i]; q.textContent='📝 מבחן'+(best!=null?' '+best+'/'+ep.quiz.length:'');
-      q.onclick=ev=>{ ev.stopPropagation(); cur.story=id; openQuiz(i); }; b.appendChild(q); }
     b.onclick=()=>{ const p=progress[id]; if(p && p.ep===i){ cur.ep=i;cur.para=p.para;cur.word=p.word; } else { cur.ep=i;cur.para=0;cur.word=0; } openReader(); };
-    list.appendChild(b);
+    const row=document.createElement('div'); row.className='eprow'; row.appendChild(b);
+    if(ep.quiz && ep.quiz.length){   // the quiz sits in its own card, next to the episode
+      const q=document.createElement('button'); q.className='quizcard';
+      const best=(quizBest[id]||{})[i];
+      q.innerHTML='<span class="qi">🧩</span><span class="ql">חידון</span><span class="qs"></span>';
+      q.querySelector('.qs').textContent=best!=null?best+' / '+ep.quiz.length:'';
+      if(best!=null && best===ep.quiz.length) q.classList.add('full');
+      q.onclick=()=>{ cur.story=id; openQuiz(i); };
+      row.appendChild(q);
+    }
+    list.appendChild(row);
   });
   show('epScreen');
 }
@@ -1104,7 +1118,7 @@ function openQuiz(e){
   stopRec(); const s=story(), ep=s.episodes[e];
   qz={e,i:0,score:0,marks:[],qs:ep.quiz};
   const season=(norm(ep.sub||'').match(/\d+/)||[])[0];
-  $('qzLabel').textContent='מבחן · '+(season?'עונה '+season+' · ':'')+ep.short; $('qzName').textContent=ep.title;
+  $('qzLabel').textContent='חידון · '+(season?'עונה '+season+' · ':'')+ep.short; $('qzName').textContent=ep.title;
   show('qzScreen'); renderQuiz();
 }
 function renderQuiz(){
