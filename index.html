@@ -56,10 +56,16 @@ button:focus-visible,input:focus-visible,textarea:focus-visible{outline:3px soli
 .story.locked,.epbtn.locked,.quizcard.locked{opacity:.45}
 .lockrow{display:flex;align-items:center;gap:14px;background:var(--paper);border:2px solid var(--line);border-radius:18px;padding:12px 18px;margin:0 16px 4px;font-size:18px;font-weight:600}
 .lockrow small{display:block;font-size:14px;font-weight:400;color:var(--muted)}
-.switch{position:relative;width:64px;height:36px;border-radius:99px;border:none;background:var(--line);flex:none;margin-inline-start:auto;transition:background .2s}
-.switch::after{content:'';position:absolute;top:4px;inset-inline-start:4px;width:28px;height:28px;border-radius:50%;background:#fff;box-shadow:0 1px 3px rgba(0,0,0,.3);transition:inset-inline-start .2s}
+.lockrow>div:first-child{flex:1}
+.switch{position:relative;width:84px;height:44px;border-radius:99px;background:var(--line);flex:none;transition:background .2s;touch-action:none}
+.switch .knob{position:absolute;top:4px;inset-inline-start:4px;width:36px;height:36px;border-radius:50%;background:#fff;box-shadow:0 1px 4px rgba(0,0,0,.35);transition:inset-inline-start .2s}
 .switch[aria-checked="true"]{background:var(--done)}
-.switch[aria-checked="true"]::after{inset-inline-start:32px}
+.switch[aria-checked="true"] .knob{inset-inline-start:44px}
+.switch.drag .knob{transition:none}
+.slide{position:relative;height:60px;border-radius:99px;background:var(--accent-soft);touch-action:none;display:grid;place-items:center;font-weight:700;color:var(--accent);font-size:18px;margin-top:12px}
+.slide .knob{position:absolute;top:6px;inset-inline-start:6px;width:48px;height:48px;border-radius:50%;background:var(--accent);color:#fff;display:grid;place-items:center;font-size:24px;transition:inset-inline-start .2s}
+.slide.drag .knob{transition:none}
+.box select{width:100%;font-size:18px;padding:10px 12px;border:2px solid var(--line);border-radius:12px;background:var(--bg);color:var(--ink);margin-bottom:10px}
 .story.add{border-style:dashed;align-items:center;justify-content:center;color:var(--muted);font-size:20px;font-weight:600}
 .del{position:absolute;top:10px;left:10px;border:none;background:none;color:var(--muted);font-size:15px;padding:6px 8px;border-radius:10px}
 .del.armed{background:var(--accent);color:#fff}
@@ -279,6 +285,9 @@ footer.ctl{display:flex;flex-direction:column;align-items:center;gap:10px;paddin
     <button class="btn warn" id="openPractice">מילים לתרגול<span class="badge" id="pBadge1">0</span></button>
   </div>
   <div class="scroll">
+    <div class="lockrow"><div>🔒 נעילת פרקים<small id="lockInfo"></small></div>
+      <button class="btn" id="stopBtn">נקודת עצירה</button>
+      <div class="switch" id="lockSw" role="switch" aria-checked="true" aria-label="נעילת פרקים – גוררים את העיגול כדי לשנות"><span class="knob"></span></div></div>
     <div class="grid" id="storyGrid"></div>
     <div class="section-title">גיבוי ותיקוני זיהוי</div>
     <div class="tools">
@@ -381,7 +390,6 @@ footer.ctl{display:flex;flex-direction:column;align-items:center;gap:10px;paddin
       <button class="chip" data-d="0">הכול</button>
     </div>
   </div>
-  <div class="lockrow"><div>נעילת פרקים לפי הסדר<small>אפשר להתקדם לפרק או לעונה הבאה רק אחרי שמסיימים לקרוא את הקודם</small></div><button class="switch" id="lockSw" role="switch" aria-checked="true" aria-label="נעילת פרקים לפי הסדר"></button></div>
   <div class="scroll" id="rpBody"></div>
 </section>
 
@@ -442,6 +450,18 @@ footer.ctl{display:flex;flex-direction:column;align-items:center;gap:10px;paddin
   </div>
 </div>
 
+<div class="overlay" id="stopOverlay" hidden>
+  <div class="box">
+    <h2>🔒 נקודת עצירה</h2>
+    <p>עד איזה פרק נועם יכול לקרוא? כל מה שאחרי הנקודה הזאת יהיה נעול.</p>
+    <label for="stopSeason">עונה</label>
+    <select id="stopSeason"></select>
+    <label for="stopEp">פרק</label>
+    <select id="stopEp"></select>
+    <div class="slide" id="stopSlide"><span>גוררים עד הסוף כדי לשמור</span><span class="knob">←</span></div>
+    <div class="row"><button class="btn" id="stopCancel">ביטול</button></div>
+  </div>
+</div>
 <div class="overlay" id="flagOverlay" hidden>
   <div class="box">
     <h2>🚩 סימון טעות</h2>
@@ -497,16 +517,22 @@ let mastered=LS.get('srp-mastered',{}); // key -> {text, t}
 let stars=LS.get('srp-stars',0);
 let doneEps=LS.get('srp-done',{});
 let lockOn=LS.get('srp-lock',true);   // episodes/seasons open only in order
+let stopAt=LS.get('srp-stop',null);    // {s:storyId,e:episode} – last episode allowed; null = automatic (in order)
+function stopIx(){ if(!stopAt) return null; const k=BUILTIN.findIndex(x=>x.id===stopAt.s); return k<0?null:k; }
 function epDone(id,i){ return (doneEps[id]||[]).includes(i); }
 function touched(id){ return !!progress[id] || (doneEps[id]||[]).length>0; }
 function seasonLock(s){   // returns the story that must be finished first, or null
-  if(!lockOn) return null; const k=BUILTIN.indexOf(s); if(k<=0) return null;
+  if(!lockOn) return null; const k=BUILTIN.indexOf(s); if(k<0) return null;
+  const sk=stopIx(); if(sk!=null) return k>sk?BUILTIN[sk]:null;
+  if(k===0) return null;
   if(touched(s.id)) return null;
   const prev=BUILTIN[k-1]; return prev.episodes.every((e,i)=>epDone(prev.id,i))?null:prev;
 }
 function epLocked(id,i){
-  if(!lockOn || i===0) return false;
+  if(!lockOn) return false;
   const s=findStory(id); if(!s || !BUILTIN.includes(s)) return false;
+  const sk=stopIx(); if(sk!=null){ const k=BUILTIN.indexOf(s); return k>sk || (k===sk && i>stopAt.e); }
+  if(i===0) return false;
   if(epDone(id,i) || epDone(id,i-1)) return false;
   const pr=progress[id]; if(pr && pr.ep>=i) return false;
   return true;
@@ -680,7 +706,7 @@ function renderLibrary(){
     if(pr && s.episodes[pr.ep]) b.querySelector('.cont').textContent='להמשיך מ'+s.episodes[pr.ep].short;
     const sl=seasonLock(s);
     if(sl){ b.classList.add('locked'); b.querySelector('h3').textContent='🔒 '+s.title;
-      b.onclick=()=>toast('קודם מסיימים לקרוא את '+sl.title); }
+      b.onclick=()=>toast(stopIx()!=null?'העונה הזאת עוד נעולה':'קודם מסיימים לקרוא את '+sl.title); }
     else b.onclick=()=>openStory(s.id);
     if(!BUILTIN.includes(s)){
       const d=document.createElement('span'); d.className='del'; d.textContent='מחק'; d.setAttribute('role','button');
@@ -713,7 +739,7 @@ function openStory(id){
     if(pr && pr.ep===i){ const h=document.createElement('span'); h.className='here'; h.textContent='להמשיך ←'; b.appendChild(h); }
     const lk=epLocked(id,i);
     if(lk){ b.classList.add('locked'); b.querySelector('.num').textContent='🔒 '+ep.short; }
-    b.onclick=lk?()=>toast('קודם מסיימים לקרוא את '+s.episodes[i-1].short):()=>{ const p=progress[id]; if(p && p.ep===i){ cur.ep=i;cur.para=p.para;cur.word=p.word; } else { cur.ep=i;cur.para=0;cur.word=0; } openReader(); };
+    b.onclick=lk?()=>toast(stopIx()!=null?'הפרק הזה עוד נעול':'קודם מסיימים לקרוא את '+s.episodes[i-1].short):()=>{ const p=progress[id]; if(p && p.ep===i){ cur.ep=i;cur.para=p.para;cur.word=p.word; } else { cur.ep=i;cur.para=0;cur.word=0; } openReader(); };
     const row=document.createElement('div'); row.className='eprow'; row.appendChild(b);
     if(ep.chars && ep.chars.length){   // characters of this episode, in their own card
       const c=document.createElement('button'); c.className='quizcard';
@@ -1403,8 +1429,50 @@ function rrow(opts){
   (opts.buttons||[]).forEach(([t,fn])=>{ const b=el('button','btn',t); b.onclick=fn; r.appendChild(b); });
   return r;
 }
-function updLockSw(){ $('lockSw').setAttribute('aria-checked',lockOn); }
-$('lockSw').onclick=()=>{ lockOn=!lockOn; LS.set('srp-lock',lockOn); updLockSw(); toast(lockOn?'נעילת הפרקים פועלת':'כל הפרקים פתוחים'); };
+function updLockSw(){
+  $('lockSw').setAttribute('aria-checked',lockOn);
+  let info;
+  if(!lockOn) info='כבויה – כל הפרקים פתוחים';
+  else if(stopIx()!=null){ const s=BUILTIN[stopIx()], e=s.episodes[stopAt.e]; info='פתוח עד '+s.title.replace("נינג'גו – ",'')+' · '+(e?e.short:''); }
+  else info='לפי הסדר – פרק נפתח אחרי שקוראים את הקודם';
+  $('lockInfo').textContent=info;
+  $('stopBtn').hidden=!lockOn;
+}
+/* a knob that changes only when dragged (a tap does nothing), so a child can't flip it by accident */
+function dragKnob(track,knob,maxFn,onEnd){
+  let x0=null,base=0,pos=0,moved=false;
+  const rtl=getComputedStyle(track).direction==='rtl';
+  track.addEventListener('pointerdown',e=>{ x0=e.clientX; moved=false; base=parseFloat(getComputedStyle(knob).insetInlineStart)||0; pos=base; track.classList.add('drag'); track.setPointerCapture(e.pointerId); });
+  track.addEventListener('pointermove',e=>{ if(x0==null) return; const dx=(e.clientX-x0)*(rtl?-1:1); if(Math.abs(dx)>6) moved=true;
+    const m=maxFn(); pos=Math.max(m[0],Math.min(m[1],base+dx)); knob.style.insetInlineStart=pos+'px'; });
+  const end=()=>{ if(x0==null) return; x0=null; track.classList.remove('drag'); knob.style.insetInlineStart=''; onEnd(pos,moved); };
+  track.addEventListener('pointerup',end); track.addEventListener('pointercancel',end);
+}
+dragKnob($('lockSw'),$('lockSw').querySelector('.knob'),()=>[4,44],(pos,moved)=>{
+  if(!moved){ toast('כדי לשנות – גוררים את העיגול'); return; }
+  const on=pos>24; if(on===lockOn) return;
+  lockOn=on; LS.set('srp-lock',lockOn); updLockSw(); renderLibrary(); toast(lockOn?'נעילת הפרקים פועלת':'כל הפרקים פתוחים');
+});
+function fillStopEps(){
+  const k=+$('stopSeason').value, sel=$('stopEp'); sel.innerHTML='';
+  if(k<0){ sel.disabled=true; return; } sel.disabled=false;
+  BUILTIN[k].episodes.forEach((e,i)=>{ const o=document.createElement('option'); o.value=i; o.textContent=e.short+' – '+e.title; sel.appendChild(o); });
+}
+$('stopBtn').onclick=()=>{
+  const ss=$('stopSeason'); ss.innerHTML='';
+  const a=document.createElement('option'); a.value=-1; a.textContent='אוטומטי – לפי הסדר שנועם קורא'; ss.appendChild(a);
+  BUILTIN.forEach((s,k)=>{ const o=document.createElement('option'); o.value=k; o.textContent=s.title; ss.appendChild(o); });
+  const sk=stopIx(); ss.value=sk==null?-1:sk; fillStopEps(); if(sk!=null) $('stopEp').value=stopAt.e;
+  $('stopOverlay').hidden=false;
+};
+$('stopSeason').onchange=fillStopEps;
+$('stopCancel').onclick=()=>{ $('stopOverlay').hidden=true; };
+dragKnob($('stopSlide'),$('stopSlide').querySelector('.knob'),()=>[6,$('stopSlide').clientWidth-54],(pos,moved)=>{
+  if(pos<$('stopSlide').clientWidth-80){ if(!moved) toast('גוררים את החץ עד הסוף'); return; }
+  const k=+$('stopSeason').value;
+  stopAt=k<0?null:{s:BUILTIN[k].id,e:+$('stopEp').value}; LS.set('srp-stop',stopAt);
+  $('stopOverlay').hidden=true; updLockSw(); renderLibrary(); toast('נקודת העצירה נשמרה');
+});
 updLockSw();
 function renderReport(){
   document.querySelectorAll('#rpRange .chip').forEach(c=>c.setAttribute('aria-pressed',+c.dataset.d===rpDays));
