@@ -66,6 +66,10 @@ button:focus-visible,input:focus-visible,textarea:focus-visible{outline:3px soli
 .slide .knob{position:absolute;top:6px;inset-inline-start:6px;width:48px;height:48px;border-radius:50%;background:var(--accent);color:#fff;display:grid;place-items:center;font-size:24px;transition:inset-inline-start .2s}
 .slide.drag .knob{transition:none}
 .box select{width:100%;font-size:18px;padding:10px 12px;border:2px solid var(--line);border-radius:12px;background:var(--bg);color:var(--ink);margin-bottom:10px}
+.story .cover{margin:-20px -20px 6px;height:110px;border-radius:18px 18px 0 0;overflow:hidden;background:#223}
+.story .cover svg,.story .cover img{width:100%;height:100%;display:block;object-fit:cover}
+.story .picbtns{position:absolute;top:8px;left:8px;display:flex;gap:6px}
+.story .picbtns span{background:rgba(255,255,255,.85);color:#1d2433;border-radius:12px;padding:6px 10px;font-size:15px;font-weight:600}
 .story.add{border-style:dashed;align-items:center;justify-content:center;color:var(--muted);font-size:20px;font-weight:600}
 .del{position:absolute;top:10px;left:10px;border:none;background:none;color:var(--muted);font-size:15px;padding:6px 8px;border-radius:10px}
 .del.armed{background:var(--accent);color:#fff}
@@ -296,6 +300,7 @@ footer.ctl{display:flex;flex-direction:column;align-items:center;gap:10px;paddin
       <button class="btn" id="copyFixes">העתק תיקוני זיהוי לשליחה</button>
       <button class="btn" id="openFlags">🚩 טעויות שסימנתי <span class="badge" id="flagCount">0</span></button>
       <input type="file" id="restoreFile" accept=".json,application/json" hidden>
+      <input type="file" id="coverFile" accept="image/*" hidden>
     </div>
   </div>
 </section>
@@ -693,6 +698,31 @@ function armButton(btn,label,fn){ // two-tap confirm, no system dialogs
   setTimeout(()=>{ if(btn.isConnected){ delete btn.dataset.armed; btn.classList.remove('armed'); btn.textContent=old; } },3000);
 }
 
+
+/* ---------- season covers: original illustrations (no show characters); a parent can replace with his own photo ---------- */
+const SVGH='<svg viewBox="0 0 300 110" preserveAspectRatio="xMidYMid slice" xmlns="http://www.w3.org/2000/svg">';
+const COVERS={
+ 'ninjago-s5':SVGH+'<defs><linearGradient id="g5" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#0d2b2a"/><stop offset="1" stop-color="#1f5a4a"/></linearGradient></defs><rect width="300" height="110" fill="url(#g5)"/><circle cx="240" cy="30" r="18" fill="#e8f7d0" opacity=".9"/><path d="M0 92 Q40 80 80 92 T160 92 T240 90 T300 92 V110 H0Z" fill="#0a1f1c"/><g fill="#9ff0c4" opacity=".85"><path d="M60 70 q0-28 20-28 q20 0 20 28 l-5-5 -5 6 -5-6 -5 6 -5-6 -5 6z"/><path d="M150 58 q0-22 16-22 q16 0 16 22 l-4-4 -4 5 -4-5 -4 5 -4-5 -4 5z" opacity=".7"/></g><g fill="#0d2b2a"><circle cx="74" cy="56" r="3"/><circle cx="86" cy="56" r="3"/><circle cx="161" cy="47" r="2.5"/><circle cx="171" cy="47" r="2.5"/></g><path d="M0 75 Q75 60 150 72 T300 66" stroke="#bff7dc" stroke-width="3" fill="none" opacity=".3"/></svg>',
+ 'ninjago-s6':SVGH+'<defs><linearGradient id="g6" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#6fb7ef"/><stop offset="1" stop-color="#cfe9fb"/></linearGradient></defs><rect width="300" height="110" fill="url(#g6)"/><circle cx="50" cy="28" r="15" fill="#ffe27a"/><g fill="#fff" opacity=".9"><ellipse cx="230" cy="25" rx="30" ry="9"/><ellipse cx="90" cy="88" rx="40" ry="10"/><ellipse cx="260" cy="95" rx="35" ry="9"/></g><g><path d="M110 55 h70 l-12 30 h-46z" fill="#8a5a33"/><rect x="110" y="48" width="70" height="9" rx="4" fill="#4caf50"/><path d="M200 38 h45 l-8 20 h-29z" fill="#7a4e2b"/><rect x="200" y="32" width="45" height="7" rx="3" fill="#56b85a"/><path d="M128 48 v-14 l10 14z M155 48 v-18 l12 18z" fill="#2e7d32"/></g></svg>',
+ 'ninjago-s7':SVGH+'<defs><linearGradient id="g7" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#2b1b4a"/><stop offset="1" stop-color="#6b3b8f"/></linearGradient></defs><rect width="300" height="110" fill="url(#g7)"/><g fill="none" stroke="#e7c36a" stroke-width="3" opacity=".55"><circle cx="60" cy="55" r="32"/><circle cx="245" cy="50" r="24"/><path d="M60 55 L60 32 M60 55 L76 64 M245 50 L245 34 M245 50 L232 58"/></g><g transform="translate(150 55)"><path d="M-24-42 h48 M-24 42 h48" stroke="#e7c36a" stroke-width="6" stroke-linecap="round"/><path d="M-20-38 Q-20-6 0 0 Q20-6 20-38z M-20 38 Q-20 6 0 0 Q20 6 20 38z" fill="#d6ecff" opacity=".35" stroke="#e7c36a" stroke-width="2"/><path d="M-12-26 Q0-10 12-26z" fill="#f2c14e"/><path d="M-15 36 Q0 18 15 36z" fill="#f2c14e"/><path d="M0 0 v20" stroke="#f2c14e" stroke-width="2"/></g></svg>',
+ 'ninjago-s8':SVGH+'<defs><linearGradient id="g8" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#140d18"/><stop offset="1" stop-color="#3c1626"/></linearGradient></defs><rect width="300" height="110" fill="url(#g8)"/><circle cx="220" cy="34" r="20" fill="#d6333a"/><g fill="#0b070d"><rect x="10" y="60" width="26" height="50"/><rect x="40" y="45" width="20" height="65"/><rect x="64" y="70" width="30" height="40"/><rect x="100" y="38" width="22" height="72"/><rect x="128" y="62" width="34" height="48"/><rect x="168" y="50" width="20" height="60"/><rect x="194" y="72" width="40" height="38"/><rect x="240" y="42" width="24" height="68"/><rect x="270" y="64" width="30" height="46"/></g><g fill="#ffcf5a" opacity=".7"><rect x="45" y="52" width="4" height="5"/><rect x="105" y="48" width="4" height="5"/><rect x="113" y="62" width="4" height="5"/><rect x="246" y="52" width="4" height="5"/><rect x="172" y="60" width="4" height="5"/></g><path d="M20 105 h260" stroke="#d6333a" stroke-width="3" opacity=".6"/></svg>',
+ 'ninjago-s9':SVGH+'<defs><linearGradient id="g9" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#f08a3c"/><stop offset="1" stop-color="#ffd38a"/></linearGradient></defs><rect width="300" height="110" fill="url(#g9)"/><circle cx="70" cy="40" r="22" fill="#fff2c4"/><path d="M0 80 Q60 62 120 80 T240 76 T300 80 V110 H0Z" fill="#c8732e"/><path d="M0 95 Q80 82 160 96 T300 92 V110 H0Z" fill="#a85a22"/><path d="M150 40 q20-14 40-6 q12-18 30-10 q-14 2-18 14 q16 4 26 18 q-20-8-34-4 q-10 10-26 8 q8-6 6-12 q-14 2-24-8z" fill="#3a1d10"/><path d="M190 34 q6-22 26-24 q-10 10-8 22z M180 44 q-4-20 6-30 q0 14 6 24z" fill="#3a1d10"/></svg>',
+ 'ninjago-s10':SVGH+'<defs><linearGradient id="g10" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#191325"/><stop offset="1" stop-color="#3a2f4d"/></linearGradient><radialGradient id="r10" cx=".5" cy=".5" r=".5"><stop offset="0" stop-color="#ffe08a"/><stop offset="1" stop-color="#ffb82e" stop-opacity="0"/></radialGradient></defs><rect width="300" height="110" fill="url(#g10)"/><path d="M180 110 L230 40 L280 110z" fill="#4b4060"/><path d="M220 50 h20 l-4-8 h-12z" fill="#c9a54c"/><circle cx="230" cy="40" r="38" fill="url(#r10)"/><path d="M226 20 q14 6 0 12 q-14 6 0 12 q14 6 0 12" stroke="#ffd35a" stroke-width="4" fill="none"/><g fill="#08060c"><ellipse cx="60" cy="70" rx="70" ry="30"/><ellipse cx="120" cy="80" rx="50" ry="26"/><ellipse cx="20" cy="40" rx="40" ry="24"/><ellipse cx="90" cy="45" rx="35" ry="20"/></g><g fill="#a36cf0" opacity=".5"><circle cx="40" cy="60" r="2"/><circle cx="100" cy="72" r="2"/><circle cx="70" cy="40" r="2"/></g></svg>'
+};
+let covers=LS.get('srp-covers',{});
+let coverFor=null;
+$('coverFile').onchange=e=>{
+  const f=e.target.files[0]; e.target.value=''; if(!f||!coverFor) return;
+  const img=new Image(), url=URL.createObjectURL(f);
+  img.onload=()=>{ const W=600, H=220, c=document.createElement('canvas'); c.width=W; c.height=H;
+    const s=Math.max(W/img.width,H/img.height), w=img.width*s, h=img.height*s;
+    c.getContext('2d').drawImage(img,(W-w)/2,(H-h)/2,w,h); URL.revokeObjectURL(url);
+    covers[coverFor]=c.toDataURL('image/jpeg',.8);
+    try{ localStorage.setItem('srp-covers',JSON.stringify(covers)); toast('התמונה נשמרה'); }catch(err){ delete covers[coverFor]; toast('אין מספיק מקום לתמונה'); }
+    renderLibrary(); };
+  img.onerror=()=>toast('לא הצלחתי לפתוח את התמונה'); img.src=url;
+};
+
 /* ---------- library ---------- */
 function renderLibrary(){
   stopRec(); badges();
@@ -701,6 +731,19 @@ function renderLibrary(){
     const b=document.createElement('button'); b.className='story';
     const pr=progress[s.id];
     b.innerHTML='<h3></h3><p></p>'+(pr?'<span class="cont"></span>':'');
+    if(covers[s.id]||COVERS[s.id]){
+      const cv=document.createElement('div'); cv.className='cover';
+      if(covers[s.id]){ const im=document.createElement('img'); im.src=covers[s.id]; im.alt=''; cv.appendChild(im); } else cv.innerHTML=COVERS[s.id];
+      b.prepend(cv);
+      const pb=document.createElement('div'); pb.className='picbtns';
+      const ch=document.createElement('span'); ch.setAttribute('role','button'); ch.textContent='🖼 תמונה';
+      ch.onclick=ev=>{ ev.stopPropagation(); coverFor=s.id; $('coverFile').click(); };
+      pb.appendChild(ch);
+      if(covers[s.id]){ const rs=document.createElement('span'); rs.setAttribute('role','button'); rs.textContent='↺';
+        rs.onclick=ev=>{ ev.stopPropagation(); armButton(rs,'לחזור לאיור?',()=>{ delete covers[s.id]; LS.set('srp-covers',covers); renderLibrary(); }); };
+        pb.appendChild(rs); }
+      b.appendChild(pb);
+    }
     b.querySelector('h3').textContent=s.title;
     b.querySelector('p').textContent=s.episodes.length+(s.episodes.length===1?' פרק':' פרקים')+(s.note?' · '+s.note:'');
     if(pr && s.episodes[pr.ep]) b.querySelector('.cont').textContent='להמשיך מ'+s.episodes[pr.ep].short;
