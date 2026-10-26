@@ -53,6 +53,13 @@ button:focus-visible,input:focus-visible,textarea:focus-visible{outline:3px soli
 .story h3{margin:0;font-size:24px;font-weight:800;color:var(--accent)}
 .story p{margin:0;color:var(--muted);font-size:16px}
 .story .cont{margin-top:auto;font-size:16px;font-weight:600;color:var(--done)}
+.story.locked,.epbtn.locked,.quizcard.locked{opacity:.45}
+.lockrow{display:flex;align-items:center;gap:14px;background:var(--paper);border:2px solid var(--line);border-radius:18px;padding:12px 18px;margin:0 16px 4px;font-size:18px;font-weight:600}
+.lockrow small{display:block;font-size:14px;font-weight:400;color:var(--muted)}
+.switch{position:relative;width:64px;height:36px;border-radius:99px;border:none;background:var(--line);flex:none;margin-inline-start:auto;transition:background .2s}
+.switch::after{content:'';position:absolute;top:4px;inset-inline-start:4px;width:28px;height:28px;border-radius:50%;background:#fff;box-shadow:0 1px 3px rgba(0,0,0,.3);transition:inset-inline-start .2s}
+.switch[aria-checked="true"]{background:var(--done)}
+.switch[aria-checked="true"]::after{inset-inline-start:32px}
 .story.add{border-style:dashed;align-items:center;justify-content:center;color:var(--muted);font-size:20px;font-weight:600}
 .del{position:absolute;top:10px;left:10px;border:none;background:none;color:var(--muted);font-size:15px;padding:6px 8px;border-radius:10px}
 .del.armed{background:var(--accent);color:#fff}
@@ -374,6 +381,7 @@ footer.ctl{display:flex;flex-direction:column;align-items:center;gap:10px;paddin
       <button class="chip" data-d="0">הכול</button>
     </div>
   </div>
+  <div class="lockrow"><div>נעילת פרקים לפי הסדר<small>אפשר להתקדם לפרק או לעונה הבאה רק אחרי שמסיימים לקרוא את הקודם</small></div><button class="switch" id="lockSw" role="switch" aria-checked="true" aria-label="נעילת פרקים לפי הסדר"></button></div>
   <div class="scroll" id="rpBody"></div>
 </section>
 
@@ -487,7 +495,22 @@ let flags=LS.get('srp-flags',[]);   // words marked as a mistake in the text: {s
 let chal=LS.get('srp-chal',{});         // challenge words: key -> {text, got, loc}
 let mastered=LS.get('srp-mastered',{}); // key -> {text, t}
 let stars=LS.get('srp-stars',0);
-let doneEps=LS.get('srp-done',{});      // storyId -> [episode indexes finished]
+let doneEps=LS.get('srp-done',{});
+let lockOn=LS.get('srp-lock',true);   // episodes/seasons open only in order
+function epDone(id,i){ return (doneEps[id]||[]).includes(i); }
+function touched(id){ return !!progress[id] || (doneEps[id]||[]).length>0; }
+function seasonLock(s){   // returns the story that must be finished first, or null
+  if(!lockOn) return null; const k=BUILTIN.indexOf(s); if(k<=0) return null;
+  if(touched(s.id)) return null;
+  const prev=BUILTIN[k-1]; return prev.episodes.every((e,i)=>epDone(prev.id,i))?null:prev;
+}
+function epLocked(id,i){
+  if(!lockOn || i===0) return false;
+  const s=findStory(id); if(!s || !BUILTIN.includes(s)) return false;
+  if(epDone(id,i) || epDone(id,i-1)) return false;
+  const pr=progress[id]; if(pr && pr.ep>=i) return false;
+  return true;
+}      // storyId -> [episode indexes finished]
 let wcount=LS.get('srp-wcount',0);      // words read correctly, ever
 const NEED=2;                           // correct readings later in the stories to conquer a challenge word
 let wlog=LS.get('srp-log',[]);           // [time, story, ep, para, wordIdx, key, text, kind, fails, ms]
@@ -655,7 +678,10 @@ function renderLibrary(){
     b.querySelector('h3').textContent=s.title;
     b.querySelector('p').textContent=s.episodes.length+(s.episodes.length===1?' פרק':' פרקים')+(s.note?' · '+s.note:'');
     if(pr && s.episodes[pr.ep]) b.querySelector('.cont').textContent='להמשיך מ'+s.episodes[pr.ep].short;
-    b.onclick=()=>openStory(s.id);
+    const sl=seasonLock(s);
+    if(sl){ b.classList.add('locked'); b.querySelector('h3').textContent='🔒 '+s.title;
+      b.onclick=()=>toast('קודם מסיימים לקרוא את '+sl.title); }
+    else b.onclick=()=>openStory(s.id);
     if(!BUILTIN.includes(s)){
       const d=document.createElement('span'); d.className='del'; d.textContent='מחק'; d.setAttribute('role','button');
       d.onclick=ev=>{ ev.stopPropagation(); armButton(d,'למחוק? לחץ שוב',()=>{
@@ -685,7 +711,9 @@ function openStory(id){
     b.querySelector('.num').textContent=ep.short; b.querySelector('.t').textContent=ep.title;
     if((doneEps[id]||[]).includes(i)){ const k=document.createElement('span'); k.className='ok'; k.textContent='✓ קראתי'; b.appendChild(k); }
     if(pr && pr.ep===i){ const h=document.createElement('span'); h.className='here'; h.textContent='להמשיך ←'; b.appendChild(h); }
-    b.onclick=()=>{ const p=progress[id]; if(p && p.ep===i){ cur.ep=i;cur.para=p.para;cur.word=p.word; } else { cur.ep=i;cur.para=0;cur.word=0; } openReader(); };
+    const lk=epLocked(id,i);
+    if(lk){ b.classList.add('locked'); b.querySelector('.num').textContent='🔒 '+ep.short; }
+    b.onclick=lk?()=>toast('קודם מסיימים לקרוא את '+s.episodes[i-1].short):()=>{ const p=progress[id]; if(p && p.ep===i){ cur.ep=i;cur.para=p.para;cur.word=p.word; } else { cur.ep=i;cur.para=0;cur.word=0; } openReader(); };
     const row=document.createElement('div'); row.className='eprow'; row.appendChild(b);
     if(ep.chars && ep.chars.length){   // characters of this episode, in their own card
       const c=document.createElement('button'); c.className='quizcard';
@@ -699,7 +727,8 @@ function openStory(id){
       q.innerHTML='<span class="qi">🧩</span><span class="ql">חידון</span><span class="qs"></span>';
       q.querySelector('.qs').textContent=best!=null?best+' / '+ep.quiz.length:'';
       if(best!=null && best===ep.quiz.length) q.classList.add('full');
-      q.onclick=()=>{ cur.story=id; openQuiz(i); };
+      if(lk){ q.classList.add('locked'); q.onclick=()=>toast('החידון ייפתח אחרי שקוראים את הפרק'); }
+      else q.onclick=()=>{ cur.story=id; openQuiz(i); };
       row.appendChild(q);
     }
     list.appendChild(row);
@@ -1374,6 +1403,9 @@ function rrow(opts){
   (opts.buttons||[]).forEach(([t,fn])=>{ const b=el('button','btn',t); b.onclick=fn; r.appendChild(b); });
   return r;
 }
+function updLockSw(){ $('lockSw').setAttribute('aria-checked',lockOn); }
+$('lockSw').onclick=()=>{ lockOn=!lockOn; LS.set('srp-lock',lockOn); updLockSw(); toast(lockOn?'נעילת הפרקים פועלת':'כל הפרקים פתוחים'); };
+updLockSw();
 function renderReport(){
   document.querySelectorAll('#rpRange .chip').forEach(c=>c.setAttribute('aria-pressed',+c.dataset.d===rpDays));
   const B=$('rpBody'); B.innerHTML='';
