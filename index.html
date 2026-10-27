@@ -525,20 +525,22 @@ let lockOn=LS.get('srp-lock',true);   // episodes/seasons open only in order
 let stopAt=LS.get('srp-stop',null);    // {s:storyId,e:episode} – last episode allowed; null = automatic (in order)
 function stopIx(){ if(!stopAt) return null; const k=BUILTIN.findIndex(x=>x.id===stopAt.s); return k<0?null:k; }
 function epDone(id,i){ return (doneEps[id]||[]).includes(i); }
+function quizDone(id,i){ const s=findStory(id); const e=s&&s.episodes[i]; if(!e||!e.quiz||!e.quiz.length) return true; return (quizBest[id]||{})[i]!=null; }
+function epFinished(id,i){ return epDone(id,i) && quizDone(id,i); }   // read to the end and quiz taken
 function touched(id){ return !!progress[id] || (doneEps[id]||[]).length>0; }
 function seasonLock(s){   // returns the story that must be finished first, or null
   if(!lockOn) return null; const k=BUILTIN.indexOf(s); if(k<0) return null;
   const sk=stopIx(); if(sk!=null) return k>sk?BUILTIN[sk]:null;
   if(k===0) return null;
   if(touched(s.id)) return null;
-  const prev=BUILTIN[k-1]; return prev.episodes.every((e,i)=>epDone(prev.id,i))?null:prev;
+  const prev=BUILTIN[k-1]; return prev.episodes.every((e,i)=>epFinished(prev.id,i))?null:prev;
 }
 function epLocked(id,i){
   if(!lockOn) return false;
   const s=findStory(id); if(!s || !BUILTIN.includes(s)) return false;
   const sk=stopIx(); if(sk!=null){ const k=BUILTIN.indexOf(s); return k>sk || (k===sk && i>stopAt.e); }
   if(i===0) return false;
-  if(epDone(id,i) || epDone(id,i-1)) return false;
+  if(epDone(id,i) || epFinished(id,i-1)) return false;
   const pr=progress[id]; if(pr && pr.ep>=i) return false;
   return true;
 }      // storyId -> [episode indexes finished]
@@ -759,7 +761,7 @@ function renderLibrary(){
     if(pr && s.episodes[pr.ep]) b.querySelector('.cont').textContent='להמשיך מ'+s.episodes[pr.ep].short;
     const sl=seasonLock(s);
     if(sl){ b.classList.add('locked'); b.querySelector('h3').textContent='🔒 '+s.title;
-      b.onclick=()=>toast(stopIx()!=null?'העונה הזאת עוד נעולה':'קודם מסיימים לקרוא את '+sl.title); }
+      b.onclick=()=>toast(stopIx()!=null?'העונה הזאת עוד נעולה':'קודם מסיימים לקרוא את כל הפרקים והחידונים של '+sl.title); }
     else b.onclick=()=>openStory(s.id);
     if(!BUILTIN.includes(s)){
       const d=document.createElement('span'); d.className='del'; d.textContent='מחק'; d.setAttribute('role','button');
@@ -792,7 +794,7 @@ function openStory(id){
     if(pr && pr.ep===i){ const h=document.createElement('span'); h.className='here'; h.textContent='להמשיך ←'; b.appendChild(h); }
     const lk=epLocked(id,i);
     if(lk){ b.classList.add('locked'); b.querySelector('.num').textContent='🔒 '+ep.short; }
-    b.onclick=lk?()=>toast(stopIx()!=null?'הפרק הזה עוד נעול':'קודם מסיימים לקרוא את '+s.episodes[i-1].short):()=>{ const p=progress[id]; if(p && p.ep===i){ cur.ep=i;cur.para=p.para;cur.word=p.word; } else { cur.ep=i;cur.para=0;cur.word=0; } openReader(); };
+    b.onclick=lk?()=>toast(stopIx()!=null?'הפרק הזה עוד נעול':!epDone(id,i-1)?'קודם מסיימים לקרוא את '+s.episodes[i-1].short:'קודם עושים את החידון של '+s.episodes[i-1].short):()=>{ const p=progress[id]; if(p && p.ep===i){ cur.ep=i;cur.para=p.para;cur.word=p.word; } else { cur.ep=i;cur.para=0;cur.word=0; } openReader(); };
     const row=document.createElement('div'); row.className='eprow'; row.appendChild(b);
     if(ep.chars && ep.chars.length){   // characters of this episode, in their own card
       const c=document.createElement('button'); c.className='quizcard';
@@ -1491,7 +1493,7 @@ function updLockSw(){
   let info;
   if(!lockOn) info='כבויה – כל הפרקים פתוחים';
   else if(stopIx()!=null){ const s=BUILTIN[stopIx()], e=s.episodes[stopAt.e]; info='פתוח עד '+s.title.replace("נינג'גו – ",'')+' · '+(e?e.short:''); }
-  else info='לפי הסדר – פרק נפתח אחרי שקוראים את הקודם';
+  else info='לפי הסדר – פרק נפתח אחרי שקוראים את הקודם ועושים את החידון שלו';
   $('lockInfo').textContent=info;
   $('stopBtn').hidden=!lockOn;
 }
