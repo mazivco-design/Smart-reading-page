@@ -1154,11 +1154,15 @@ function showTries(){
   if(fails>=1) setStatus('לא זוהה. נסה שוב, או המשך לקרוא','try');
 }
 let followT=null;
+function followMiss(q){   // follow mode: a word the reader went past without being heard turns orange (and goes to practice)
+  const w=words[q]; if(!w || !w.req || w.orange) return;
+  w.passed=true; failHeard=[]; logWord(q,'skip'); markOrange(q,'skip');
+}
 function followEndCheck(){   // the last word or two were not heard: move on after a short silence
   clearTimeout(followT);
   let left=0; for(let q=pos;q<words.length;q++) if(words[q].req) left++;
   if(left>0 && left<=2){ const pg=pageIdx, at=pos;
-    followT=setTimeout(()=>{ if(pageIdx===pg && pos===at && listening && !finishing){ for(let q=pos;q<words.length;q++) words[q].passed=true; pos=words.length; paint(); saveProg(); paraFinished(); } },2500); }
+    followT=setTimeout(()=>{ if(pageIdx===pg && pos===at && listening && !finishing){ for(let q=pos;q<words.length;q++) followMiss(q); pos=words.length; paint(); saveProg(); paraFinished(); } },2500); }
 }
 function onResultFollow(e){
   const toks=[];
@@ -1183,8 +1187,8 @@ function onResultFollow(e){
       if(!strong) found=-1;
     }
     if(found>=0){
-      for(let q=pos;q<found;q++) if(words[q].req) words[q].passed=true;
-      pos=found; logWord(pos,'ok'); i+=used; consumed=i; advance(); continue;
+      for(let q=pos;q<found;q++) followMiss(q);
+      pos=found; logWord(pos,'ok'); if(words[pos].orange) fixOrange(pos); i+=used; consumed=i; advance(); continue;
     }
     if(tk.fin || i<toks.length-1){ i++; consumed=i; continue; }
     break;   // still being recognized
