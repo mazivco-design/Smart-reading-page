@@ -929,7 +929,7 @@ function logWord(i,kind){
   const w=words[i]; if(!w||!w.req) return;
   const ms=listening?Date.now()-wordStart:null;
   wlog.push([Date.now(),cur.story,cur.ep,w.p,w.i,w.key,w.text.replace(/[.,!?:;"״()–—]/g,''),kind,fails,ms]);
-  if(wlog.length>30000) wlog=wlog.slice(-30000);
+  if(wlog.length>9000) wlog=wlog.slice(-9000);   // kept under the cloud-sync size limit
   LS.set('srp-log',wlog);
   if((kind==='ok'||kind==='retry') && w.orange) fixOrange(i);
   if(kind==='ok'||kind==='retry') onCorrect(i);
@@ -1636,5 +1636,9 @@ if(!LS.get('srp-epv2',false)){
 
 renderLibrary();
 </script>
+<!-- cloud sync (shared Ziviz projects Firebase): syncs every srp-* key in localStorage -->
+<script src="https://mazivco-design.github.io/Ziviz-Projects-/firebase-config.js"></script>
+<script src="https://mazivco-design.github.io/Ziviz-Projects-/ls-sync.js" data-app="smart-reading-page" data-prefix="srp-" data-button="#libScreen .top" data-busy="#rdScreen:not([hidden]),#qzScreen:not([hidden])"></script>
+<script type="module" src="https://mazivco-design.github.io/Ziviz-Projects-/sync.js"></script>
 </body>
 </html>
