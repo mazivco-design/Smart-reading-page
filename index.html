@@ -1020,20 +1020,35 @@ $('rdBack').onclick=()=>openStory(cur.story);
 $('epBack').onclick=renderLibrary;
 
 /* ---------- hear a word ---------- */
+/* iPad Safari: speech must be "unlocked" once from a touch, the utterance must be kept alive,
+   cancel() right before speak() can swallow the new utterance, and while the microphone is still
+   recording the speech comes out silent – so we wait a moment after stopping the microphone. */
+let curUtt=null, ttsUnlocked=false;
+function unlockTTS(){
+  if(ttsUnlocked || !('speechSynthesis' in window)) return; ttsUnlocked=true;
+  try{ const u=new SpeechSynthesisUtterance(' '); u.volume=0; speechSynthesis.speak(u); }catch(e){}
+}
+document.addEventListener('touchend',unlockTTS,{once:true,passive:true});
+document.addEventListener('click',unlockTTS,{once:true});
+function heVoice(){ return speechSynthesis.getVoices().find(v=>v.lang&&v.lang.replace('_','-').toLowerCase().startsWith('he')); }
 function speak(text,after){
-  if(!('speechSynthesis' in window)) return;
-  const u=new SpeechSynthesisUtterance(text.replace(/[^֐-׿a-zA-Z0-9'׳]/g,''));
-  u.lang='he-IL'; u.rate=.8;
-  const v=speechSynthesis.getVoices().find(v=>v.lang&&v.lang.startsWith('he')); if(v) u.voice=v;
-  if(after) u.onend=after;
-  speechSynthesis.cancel(); speechSynthesis.speak(u);
+  if(!('speechSynthesis' in window)){ if(after) after(); return; }
+  const u=new SpeechSynthesisUtterance(text.replace(/[^֐-׿a-zA-Z0-9'׳\s]/g,' ').replace(/\s+/g,' ').trim());
+  u.lang='he-IL'; u.rate=.8; u.volume=1;
+  const v=heVoice(); if(v) u.voice=v;
+  let done=false; const fin=()=>{ if(done) return; done=true; curUtt=null; if(after) after(); };
+  u.onend=fin; u.onerror=fin; setTimeout(fin,6000);
+  curUtt=u;
+  const go=()=>{ try{ speechSynthesis.resume(); }catch(e){} speechSynthesis.speak(u); };
+  if(speechSynthesis.speaking||speechSynthesis.pending){ speechSynthesis.cancel(); setTimeout(go,120); } else go();
 }
 function hearWord(i){
   const w=words[i]; if(!w) return;
   const wasOn=listening; if(wasOn) stopRec(true);
   w.el.classList.add('speaking');
-  speak(w.text,()=>{ w.el.classList.remove('speaking'); if(wasOn) startRec(); });
-  setTimeout(()=>w.el.classList.remove('speaking'),2500);
+  const say=()=>speak(w.text,()=>{ w.el.classList.remove('speaking'); if(wasOn && !$('rdScreen').hidden) startRec(); });
+  if(wasOn) setTimeout(say,450); else say();   // give the microphone time to let go of the audio
+  setTimeout(()=>w.el.classList.remove('speaking'),3000);
 }
 /* auto-fit: largest font size where the whole page fits without scrolling */
 let readMode=LS.get('srp-mode','follow');   // 'follow' (marker follows the reader) or 'exact' (word by word)
@@ -1443,8 +1458,7 @@ function renderQuiz(){
   });
   B.appendChild(qa);
 }
-function speak2(t){ if(!('speechSynthesis' in window)) return; const u=new SpeechSynthesisUtterance(t); u.lang='he-IL'; u.rate=.85;
-  const v=speechSynthesis.getVoices().find(v=>v.lang&&v.lang.startsWith('he')); if(v) u.voice=v; speechSynthesis.cancel(); speechSynthesis.speak(u); }
+function speak2(t){ speak(t); }
 $('qzBack').onclick=()=>openStory(cur.story);
 $('doneQuiz').onclick=()=>{ $('doneOverlay').hidden=true; openQuiz(cur.ep); };
 
