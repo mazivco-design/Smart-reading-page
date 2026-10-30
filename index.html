@@ -444,6 +444,7 @@ footer.ctl{display:flex;flex-direction:column;align-items:center;gap:10px;paddin
   <button class="btn" id="wmStart">🔊 לשמוע שוב</button>
   <button class="btn" id="wmTeach">🎙 ללמד את המילה</button>
   <button class="btn" id="wmFlag">🚩 יש כאן טעות</button>
+  <button class="btn" id="wmRename">✏️ לשנות את המילה</button>
 </div>
 
 <div class="overlay" id="charsOverlay" hidden>
@@ -465,6 +466,20 @@ footer.ctl{display:flex;flex-direction:column;align-items:center;gap:10px;paddin
     <select id="stopEp"></select>
     <div class="slide" id="stopSlide"><span>גוררים עד הסוף כדי לשמור</span><span class="knob">←</span></div>
     <div class="row"><button class="btn" id="stopCancel">ביטול</button></div>
+  </div>
+</div>
+<div class="overlay" id="renameOverlay" hidden>
+  <div class="box">
+    <h2>✏️ לשנות מילה</h2>
+    <p>המילה תשתנה בכל הסיפורים, בחידונים וברשימות הדמויות. למשל: שם של דמות שנועם מכיר בשם אחר.</p>
+    <div class="flagctx" id="renameFrom"></div>
+    <label for="renameTo">איך לכתוב אותה?</label>
+    <input type="text" id="renameTo" dir="rtl" autocomplete="off">
+    <div class="row">
+      <button class="btn primary" id="renameSave">שמור</button>
+      <button class="btn" id="renameReset" hidden>↺ לחזור למילה המקורית</button>
+      <button class="btn" id="renameCancel">ביטול</button>
+    </div>
   </div>
 </div>
 <div class="overlay" id="flagOverlay" hidden>
@@ -822,7 +837,7 @@ function openStory(id){
   s.episodes.forEach((ep,i)=>{
     const b=document.createElement('button'); b.className='epbtn';
     b.innerHTML='<span class="num"></span><span class="t"></span>';
-    b.querySelector('.num').textContent=ep.short; b.querySelector('.t').textContent=ep.title;
+    b.querySelector('.num').textContent=ep.short; b.querySelector('.t').textContent=rn(ep.title);
     if((doneEps[id]||[]).includes(i)){ const k=document.createElement('span'); k.className='ok'; k.textContent='✓ קראתי'; b.appendChild(k); }
     if(pr && pr.ep===i){ const h=document.createElement('span'); h.className='here'; h.textContent='להמשיך ←'; b.appendChild(h); }
     const lk=epLocked(id,i);
@@ -867,9 +882,35 @@ function saveProg(){
   if(a){ cur.para=a.p; cur.word=a.i; }
   progress[cur.story]={ep:cur.ep,para:cur.para,word:cur.word}; LS.set('srp-progress',progress);
 }
+/* ---------- renamed words (e.g. a character Noam knows by another name) ----------
+   renames[norm(original)] = {from: original word as written, to: the new text}. A rule also applies after
+   a one- or two-letter prefix (ו ה ב ל מ כ ש), so "לזיין" follows a rule made for "זיין". */
+let renames=LS.get('srp-renames',{});
+const RN_PREF='ובהלמכש';
+function splitTok(tok){
+  const lead=(tok.match(/^[^א-תa-zA-Z]*/)||[''])[0];
+  const rest=tok.slice(lead.length);
+  const trail=(rest.match(/[^א-תa-zA-Z֑-ׇ'׳]*$/)||[''])[0];
+  return {lead, core:rest.slice(0,rest.length-trail.length), trail};
+}
+function rnTok(tok){
+  if(!tok) return tok;
+  const {lead,core,trail}=splitTok(tok); if(!core) return tok;
+  const k=norm(core); if(!k) return tok;
+  if(renames[k]) return lead+renames[k].to+trail;
+  for(let pl=1;pl<=2;pl++){
+    const r=renames[k.slice(pl)]; if(!r || k.length-pl<2) continue;
+    if(![...k.slice(0,pl)].every(c=>RN_PREF.includes(c))) continue;
+    let n=0, j=0; while(j<core.length && n<pl){ if(/[א-ת]/.test(core[j])) n++; j++; }
+    while(j<core.length && /[֑-ׇ]/.test(core[j])) j++;
+    return lead+core.slice(0,j)+r.to+trail;
+  }
+  return tok;
+}
+function rn(text){ if(!text || !Object.keys(renames).length) return text; return text.split(/(\s+)/).map(x=>/\s/.test(x)?x:rnTok(x)).join(''); }
 function buildFlow(ep){
   flow=[]; flowIx={};
-  ep.paras.forEach((t,p)=>t.split(/\s+/).filter(Boolean).forEach((x,i)=>{ flowIx[p+':'+i]=flow.length; flow.push({p,i,t:x}); }));
+  ep.paras.forEach((t,p)=>t.split(/\s+/).filter(Boolean).forEach((x,i)=>{ flowIx[p+':'+i]=flow.length; flow.push({p,i,t:rnTok(x),o:x}); }));
 }
 function renderRange(a,b){
   const box=$('text'); box.innerHTML='';
@@ -912,7 +953,7 @@ function loadPara(){
   const s=story(); const ep=s.episodes[cur.ep];
   const season=(norm(ep.sub||'').match(/\d+/)||[])[0];
   $('epLabel').textContent=(season?'עונה '+season+' · ':s.title+' · ')+ep.short;
-  $('epName').textContent=ep.title;
+  $('epName').textContent=rn(ep.title);
   buildFlow(ep);
   if(cur.para>=ep.paras.length){ cur.para=ep.paras.length-1; cur.word=0; }
   paginate();
@@ -1115,6 +1156,27 @@ function openWordMenu(i,sp){
 }
 document.addEventListener('pointerdown',e=>{ if(!$('wordMenu').hidden && !e.target.closest('#wordMenu')) $('wordMenu').hidden=true; },true);
 function startFrom(i){ $('wordMenu').hidden=true; pos=i; skipNonReq(); resetTries(); paint(); saveProg(); }
+let renameKey=null;
+$('wmRename').onclick=()=>{
+  $('wordMenu').hidden=true; const w=words[menuI]; if(!w) return;
+  const f=flow[pages[pageIdx].start+menuI]; const orig=splitTok(f.o||f.t).core;
+  // if the word shows a renamed form, edit that rule (the prefix-free original)
+  let k=norm(orig); if(!renames[k]){ for(let pl=1;pl<=2;pl++){ if(renames[k.slice(pl)]){ k=k.slice(pl); break; } } }
+  renameKey=k; const r=renames[k];
+  $('renameFrom').textContent='המילה המקורית: '+(r?r.from:orig);
+  $('renameTo').value=r?r.to:splitTok(w.text).core;
+  $('renameReset').hidden=!r;
+  $('renameOverlay').hidden=false; setTimeout(()=>$('renameTo').focus(),50);
+};
+function afterRename(msg){ $('renameOverlay').hidden=true; saveProg(); loadPara(); toast(msg); }
+$('renameSave').onclick=()=>{
+  const to=$('renameTo').value.trim(); if(!to || !renameKey) return;
+  const f=flow[pages[pageIdx].start+menuI]; const from=renames[renameKey]?renames[renameKey].from:splitTok(f.o||f.t).core;
+  if(norm(to)===renameKey){ delete renames[renameKey]; } else renames[renameKey]={from,to};
+  LS.set('srp-renames',renames); afterRename('המילה השתנתה בכל המקומות');
+};
+$('renameReset').onclick=()=>{ if(renameKey){ delete renames[renameKey]; LS.set('srp-renames',renames); } afterRename('חזרנו למילה המקורית'); };
+$('renameCancel').onclick=()=>{ $('renameOverlay').hidden=true; };
 let menuHideT; $('wmStart').onclick=()=>{ $('wordMenu').hidden=true; hearWord(menuI); };
 $('wmTeach').onclick=()=>{ $('wordMenu').hidden=true; openTeach(menuI); };
 
@@ -1426,9 +1488,10 @@ $('copyFixes').onclick=()=>{
 /* ---------- characters of an episode ---------- */
 function openChars(sid,e){
   const ep=findStory(sid).episodes[e];
-  $('charsTitle').textContent='👥 הדמויות ב'+ep.short+' · '+ep.title;
+  $('charsTitle').textContent='👥 הדמויות ב'+ep.short+' · '+rn(ep.title);
   const L=$('charsList'); L.innerHTML='';
-  ep.chars.forEach(c=>{
+  ep.chars.forEach(c0=>{
+    const c={n:rn(c0.n),d:rn(c0.d)};
     const r=el('div','chrow'); const nm=el('div','nm'); nm.appendChild(el('b',null,c.n)); nm.appendChild(el('span',null,c.d)); r.appendChild(nm);
     const h=el('button',null,'🔊'); h.setAttribute('aria-label','להשמיע את השם'); h.onclick=()=>speak2(c.n); r.appendChild(h);
     const main=c.n.split(/\s+/).filter(w=>!['סנסיי','קפיטנ'].includes(norm(w)))[0]||c.n;   // the name itself, without a title
@@ -1447,7 +1510,7 @@ function openQuiz(e){
   stopRec(); const s=story(), ep=s.episodes[e];
   qz={e,i:0,score:0,marks:[],qs:ep.quiz};
   const season=(norm(ep.sub||'').match(/\d+/)||[])[0];
-  $('qzLabel').textContent='חידון · '+(season?'עונה '+season+' · ':'')+ep.short; $('qzName').textContent=ep.title;
+  $('qzLabel').textContent='חידון · '+(season?'עונה '+season+' · ':'')+ep.short; $('qzName').textContent=rn(ep.title);
   show('qzScreen'); renderQuiz();
 }
 function renderQuiz(){
@@ -1466,9 +1529,9 @@ function renderQuiz(){
     row.appendChild(again); row.appendChild(back); end.appendChild(row); B.appendChild(end); return;
   }
   const q=qz.qs[qz.i];
-  const qq=el('div','qq'); qq.appendChild(el('p',null,q.q)); const hb=el('button',null,'🔊'); hb.setAttribute('aria-label','להשמיע את השאלה'); hb.onclick=()=>speak2(q.q); qq.appendChild(hb); B.appendChild(qq);
+  const qq=el('div','qq'); qq.appendChild(el('p',null,rn(q.q))); const hb=el('button',null,'🔊'); hb.setAttribute('aria-label','להשמיע את השאלה'); hb.onclick=()=>speak2(rn(q.q)); qq.appendChild(hb); B.appendChild(qq);
   const qa=el('div','qa');
-  shuffle(q.a.map((t,k)=>({t,ok:k===0}))).forEach(o=>{
+  shuffle(q.a.map((t,k)=>({t:rn(t),ok:k===0}))).forEach(o=>{
     const b=el('button',null,o.t);
     b.onclick=()=>{
       qa.querySelectorAll('button').forEach(x=>x.disabled=true);
