@@ -1030,12 +1030,14 @@ function unlockTTS(){
 }
 document.addEventListener('touchend',unlockTTS,{once:true,passive:true});
 document.addEventListener('click',unlockTTS,{once:true});
+if('speechSynthesis' in window){ speechSynthesis.getVoices(); speechSynthesis.onvoiceschanged=()=>speechSynthesis.getVoices(); }
 function heVoice(){ return speechSynthesis.getVoices().find(v=>v.lang&&v.lang.replace('_','-').toLowerCase().startsWith('he')); }
 function speak(text,after){
   if(!('speechSynthesis' in window)){ if(after) after(); return; }
   const u=new SpeechSynthesisUtterance(text.replace(/[^֐-׿a-zA-Z0-9'׳\s]/g,' ').replace(/\s+/g,' ').trim());
   u.lang='he-IL'; u.rate=.8; u.volume=1;
   const v=heVoice(); if(v) u.voice=v;
+  else if(speechSynthesis.getVoices().length && !speak.warned){ speak.warned=true; toast('אין במכשיר הזה קול בעברית, ולכן אי אפשר להשמיע מילים'); }
   let done=false; const fin=()=>{ if(done) return; done=true; curUtt=null; if(after) after(); };
   u.onend=fin; u.onerror=fin; setTimeout(fin,6000);
   curUtt=u;
