@@ -142,7 +142,7 @@ main.rd{flex:1;min-height:0;display:flex;justify-content:center}
 .w.read{color:var(--done)}
 .w.orange{color:var(--warn);background:var(--warn-soft)}
 .w.skip{color:var(--muted)}
-.w.cur{background:var(--accent-soft);color:var(--ink);box-shadow:0 .12em 0 var(--accent);font-weight:700}
+.w.cur{background:var(--accent-soft);color:var(--ink);box-shadow:0 .12em 0 var(--accent);-webkit-text-stroke:.03em currentColor}
 .w.miss{animation:shake .35s}
 @keyframes shake{25%{transform:translateX(-4px)}75%{transform:translateX(4px)}}
 footer.ctl{display:flex;flex-direction:column;align-items:center;gap:10px;padding-block:12px;justify-content:center}
@@ -841,6 +841,10 @@ let words=[], fails=0, failHeard=[], finishing=false;
 let flow=[], flowIx={}, pages=[], pageIdx=0, pos=0, flowEp='';
 function story(){ return findStory(cur.story); }
 function openReader(){ show('rdScreen'); badges(); loadPara(); }
+/* the story font arrives from the web a moment after the page opens; when it does, the words take
+   a different amount of space – so lay the pages out again (keeping the reader's place) */
+function relayout(){ if(!$('rdScreen').hidden && flow.length){ saveProg(); loadPara(); } }
+if(document.fonts){ document.fonts.ready.then(relayout); document.fonts.addEventListener('loadingdone',relayout); }
 function saveProg(){
   let a=words[pos];
   if(!a){ const pg=pages[pageIdx]; a=(pg && flow[pg.end]) || flow[flow.length-1]; }
@@ -880,7 +884,7 @@ function paginate(){
       hi=lo;
       // prefer to end the page at a paragraph or sentence end, if that keeps most of the page
       if(hi<flow.length && flow[hi].i!==0){
-        for(let k=hi;k>s+Math.floor((hi-s)*0.6);k--){
+        for(let k=hi;k>s+Math.floor((hi-s)*0.8);k--){
           if(flow[k].i===0 || /[.!?:][״"]?$/.test(flow[k-1].t)){ hi=k; break; }
         }
       }
