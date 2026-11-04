@@ -276,6 +276,36 @@ footer.ctl{display:flex;flex-direction:column;align-items:center;gap:10px;paddin
 .toast{position:fixed;bottom:calc(24px + env(safe-area-inset-bottom,0px));left:50%;transform:translateX(-50%);background:var(--ink);color:var(--paper);padding:12px 20px;border-radius:14px;font-size:17px;z-index:9}
 @media (prefers-reduced-motion:reduce){*{animation:none!important;transition:none!important}}
 @media (max-width:640px){.text{padding:8px 16px 20px}.heard{order:9;max-width:none}.pagebtn .bar{width:70px}.eptag b{font-size:19px}}
+
+/* ---------- world map ---------- */
+.mapwrap{display:flex;flex-direction:column;gap:12px;max-width:1100px;margin:0 auto;width:100%}
+.mapnote{margin:0;font-size:17px;color:var(--muted)}
+.mapnote b{color:var(--accent)}
+.mapbox{position:relative;border:2px solid var(--line);border-radius:22px;overflow:hidden;background:#bfe0ea}
+.mapbox svg{display:block;width:100%;height:auto}
+.mapbox svg>:not(#mpins){pointer-events:none}
+.mapbox .pl{cursor:pointer}
+.mapbox .pl circle.dot{fill:#fffdf8;stroke:#7a5a32;stroke-width:3}
+.mapbox .pl text.ic{font-size:26px;text-anchor:middle;dominant-baseline:central;pointer-events:none}
+.mapbox .pl text.lb{font-family:var(--ui);font-size:19px;font-weight:800;fill:#3b2a14;text-anchor:middle;paint-order:stroke;stroke:#f6ecd2;stroke-width:5px;stroke-linejoin:round;pointer-events:none}
+.mapbox .pl.empty{opacity:.55}
+.mapbox .pl.sel circle.dot{fill:var(--accent);stroke:#fff}
+.mapbox .pl.hot circle.ring{fill:none;stroke:var(--accent);stroke-width:4;animation:mpulse 1.6s ease-out infinite;transform-box:fill-box;transform-origin:center}
+@keyframes mpulse{0%{opacity:.9;transform:scale(.8)}100%{opacity:0;transform:scale(1.9)}}
+.realms{display:flex;flex-wrap:wrap;gap:10px;align-items:center}
+.realms .rt{font-weight:800;font-size:18px}
+.realm{display:flex;align-items:center;gap:8px;border:2px dashed #8a6bc2;background:var(--paper);border-radius:99px;padding:8px 16px;font-size:17px;font-weight:700;min-height:48px}
+.realm.empty{opacity:.55}
+.realm.sel{background:#8a6bc2;color:#fff;border-style:solid}
+.realm.hot{box-shadow:0 0 0 4px var(--accent)}
+.mpanel{background:var(--paper);border:2px solid var(--line);border-radius:20px;padding:16px 18px}
+.mpanel h3{margin:0 0 4px;font-size:24px;color:var(--accent)}
+.mpanel p{margin:0 0 12px;font-size:17px}
+.mpanel .eps{display:flex;flex-wrap:wrap;gap:8px}
+.mpanel .ep{border:2px solid var(--line);background:var(--bg);border-radius:14px;padding:8px 12px;font-size:16px;font-weight:600;min-height:44px;text-align:start}
+.mpanel .ep.locked{opacity:.5}
+.mpanel .ep.read{border-color:var(--done)}
+.mpanel .sn{width:100%;font-size:15px;font-weight:800;color:var(--muted);margin-top:4px}
 </style>
 </head>
 <body>
@@ -285,6 +315,7 @@ footer.ctl{display:flex;flex-direction:column;align-items:center;gap:10px;paddin
   <div class="top">
     <h2 class="brand">דף קריאה חכם<small>בוחרים סיפור, קוראים בקול, והמילה עוברת רק כשהיא נקראת נכון</small></h2>
     <button class="btn gold" id="openShelf">המדף שלי <span class="stars" id="starsLib">⭐ 0</span></button>
+    <button class="btn" id="openMap">🗺️ מפת נינג'גו</button>
     <button class="btn" id="openReport">דוח הורה</button>
     <button class="btn warn" id="openPractice">מילים לתרגול<span class="badge" id="pBadge1">0</span></button>
   </div>
@@ -319,6 +350,7 @@ footer.ctl{display:flex;flex-direction:column;align-items:center;gap:10px;paddin
   <div class="top">
     <button class="btn" id="rdBack">→ פרקים</button>
     <div class="eptag"><b id="epLabel"></b><span id="epName"></span></div>
+    <button class="btn" id="rdMap" aria-label="איפה הפרק קורה – מפה">🗺️</button>
     <span class="stars" id="starsRd">⭐ 0</span>
     <button class="btn warn" id="rdPractice">לתרגול<span class="badge" id="pBadge2">0</span></button>
   </div>
@@ -522,6 +554,46 @@ footer.ctl{display:flex;flex-direction:column;align-items:center;gap:10px;paddin
   </div>
 </div>
 
+
+<!-- ============ WORLD MAP ============ -->
+<section class="screen" id="mapScreen" hidden>
+  <div class="top">
+    <button class="btn" id="mapBack">→ חזרה</button>
+    <h2>מַפַּת נִינְגָ'אגּוֹ</h2>
+  </div>
+  <div class="scroll"><div class="mapwrap">
+    <p class="mapnote" id="mapNote"></p>
+    <div class="mapbox"><svg viewBox="0 0 1000 700" role="img" aria-label="מפת עולם נינג'גו">
+  <defs>
+    <pattern id="mwave" width="60" height="30" patternUnits="userSpaceOnUse"><path d="M0 15 q15 -9 30 0 t30 0" fill="none" stroke="#9fcbd9" stroke-width="2"/></pattern>
+    <pattern id="msand" width="18" height="18" patternUnits="userSpaceOnUse"><circle cx="4" cy="4" r="1.6" fill="#c9a25a"/><circle cx="13" cy="12" r="1.4" fill="#c9a25a"/></pattern>
+  </defs>
+  <rect width="1000" height="700" fill="#bfe0ea"/><rect width="1000" height="700" fill="url(#mwave)"/>
+  <!-- main island -->
+  <path d="M150 170 C170 100 260 70 340 85 C420 60 520 55 610 75 C700 70 790 110 820 180 C860 250 845 330 810 390 C790 450 800 500 740 540 C660 590 560 575 480 585 C390 600 300 580 240 535 C180 495 120 450 120 370 C110 300 125 230 150 170 Z" fill="#e9dcb4" stroke="#7a5a32" stroke-width="4"/>
+  <!-- forests -->
+  <g fill="#7fae6b" opacity=".85"><circle cx="300" cy="420" r="22"/><circle cx="330" cy="440" r="20"/><circle cx="270" cy="450" r="18"/><circle cx="380" cy="500" r="20"/><circle cx="410" cy="480" r="16"/><circle cx="650" cy="500" r="18"/><circle cx="680" cy="480" r="15"/></g>
+  <!-- mountains -->
+  <g fill="#a8957a" stroke="#6b5233" stroke-width="3" stroke-linejoin="round">
+    <path d="M400 230 L450 120 L500 230 Z"/><path d="M470 230 L520 150 L570 230 Z"/>
+    <path d="M560 190 L605 100 L650 190 Z"/><path d="M620 200 L665 120 L710 200 Z"/><path d="M690 210 L730 145 L770 210 Z"/>
+  </g>
+  <g fill="#fff"><path d="M436 150 L450 120 L464 150 Z"/><path d="M592 126 L605 100 L618 126 Z"/><path d="M653 146 L665 120 L677 146 Z"/></g>
+  <!-- sea of sand -->
+  <path d="M470 300 C540 270 650 280 700 320 C740 360 720 430 650 445 C580 460 500 440 470 400 C450 370 445 320 470 300 Z" fill="#e6c27a" stroke="#c9a25a" stroke-width="3"/>
+  <path d="M470 300 C540 270 650 280 700 320 C740 360 720 430 650 445 C580 460 500 440 470 400 C450 370 445 320 470 300 Z" fill="url(#msand)"/>
+  <!-- city blocks -->
+  <g fill="#b9a993" stroke="#6b5233" stroke-width="2"><rect x="190" y="160" width="26" height="40"/><rect x="220" y="140" width="22" height="60"/><rect x="246" y="168" width="30" height="32"/><rect x="280" y="150" width="20" height="50"/></g>
+  <!-- small islands -->
+  <path d="M90 560 C110 535 160 535 175 560 C185 585 140 600 110 595 C85 590 80 575 90 560 Z" fill="#e9dcb4" stroke="#7a5a32" stroke-width="3"/>
+  <path d="M900 380 C930 360 975 375 980 410 C985 450 945 470 915 460 C885 450 880 400 900 380 Z" fill="#6d6a7a" stroke="#3e3b4a" stroke-width="3"/>
+  <text x="820" y="670" font-size="20" fill="#3f7f99" text-anchor="middle" font-weight="700">הַיָּם הָאֵינְסוֹפִי</text>
+  <g id="mpins"></g>
+</svg></div>
+    <div class="realms" id="mapRealms"></div>
+    <div class="mpanel" id="mapPanel"></div>
+  </div></div>
+</section>
 <div class="toast" id="toast" hidden></div>
 
 <script>
@@ -764,7 +836,7 @@ function matches(tok,word){
 }
 
 /* ---------- UI helpers ---------- */
-function show(id){ ['libScreen','epScreen','rdScreen','prScreen','rpScreen','shScreen','qzScreen'].forEach(s=>$(s).hidden=(s!==id)); }
+function show(id){ ['mapScreen','libScreen','epScreen','rdScreen','prScreen','rpScreen','shScreen','qzScreen'].forEach(s=>$(s).hidden=(s!==id)); }
 let toastT; function toast(t){ const el=$('toast'); el.textContent=t; el.hidden=false; clearTimeout(toastT); toastT=setTimeout(()=>el.hidden=true,2600); }
 function badges(){ $('flagCount').textContent=flags.length; $('pBadge1').textContent=practice.length; $('pBadge2').textContent=practice.length; $('starsLib').textContent='⭐ '+stars; $('starsRd').textContent='⭐ '+stars; }
 function armButton(btn,label,fn){ // two-tap confirm, no system dialogs
@@ -1749,6 +1821,109 @@ if(!LS.get('srp-epv2',false)){
   LS.set('srp-progress',progress); LS.set('srp-done',doneEps); LS.set('srp-practice',practice); LS.set('srp-chal',chal); LS.set('srp-log',wlog);
   LS.set('srp-epv2',true);
 }
+
+/* ---------- world map ----------
+   Positions follow what the series shows (city on the coast, the Sea of Sand to its east, the monastery on a
+   high mountain, the Dark Island across the Endless Sea); places with no fixed spot in the series are placed by us.
+   Each place lists the episodes whose text mentions it. */
+const PLACES=[
+ {id:'city',name:"נינג'אגו סיטי",ic:'🏙️',x:245,y:205,re:/נינג'אגו סיטי/,d:"העיר הגדולה של נינג'גו, על החוף. שם גרים רוב האנשים, ושם קורים הרבה מהקרבות."},
+ {id:'borg',name:'מגדל בורג',ic:'🗼',x:190,y:120,re:/מגדל.{0,4}בורג|מגדל של סיירוס/,d:'המגדל הגבוה של סיירוס בורג, הממציא, באמצע העיר.'},
+ {id:'club',name:'מועדון החוקרים',ic:'🧭',x:320,y:150,re:/מועדון החוקרים/,d:'מועדון של חוקרים והרפתקנים בעיר. שם שמרו את תה המסעות.'},
+ {id:'kryp',name:'קריפטריום',ic:'⛓️',x:265,y:345,re:/קריפטריום/,d:'בית הסוהר השמור ביותר בנינג\'גו. שם יושבים הנבלים שנתפסו.'},
+ {id:'light',name:'המגדלור',ic:'🗼',x:140,y:330,re:/מגדלור/,d:'מגדלור על החוף.'},
+ {id:'mon',name:'מנזר הספינג\'יצו',ic:'⛩️',x:450,y:95,re:/מנזר/,d:'הבית של הנינג\'ות וסנסיי וו, על פסגה גבוהה בהרים.'},
+ {id:'tea',name:'בית התה של סנסיי וו',ic:'🍵',x:410,y:270,re:/בית התה/,d:'בית התה של סנסיי וו, למרגלות ההרים.'},
+ {id:'alps',name:'הר היללות',ic:'🏔️',x:690,y:110,re:/הר היללות/,d:'הרים גבוהים וקרים בצפון, שהרוח בהם מייללת.'},
+ {id:'desert',name:'ים החול והמדבר',ic:'🏜️',x:590,y:370,re:/(^|[\s"(בהלמו])מדבר(?![יו]?[םת]|ות| ל| עם| על| אל| אתו| איתו| בשקט| ככה)|פירמיד/,no:['ninjago-s9','ninjago-s8:9'],d:'מדבר ענק ממזרח לעיר. במדבר האבדון מסתתרת הפירמידה העתיקה של אספירה.'},
+ {id:'stiix',name:'סטיקס',ic:'🛶',x:790,y:300,re:/סטיקס/,d:'עיר שבנויה על עמודי עץ מעל המים, במזרח.'},
+ {id:'boil',name:'הים הרותח',ic:'🌋',x:480,y:630,re:/הים הרותח/,d:'ים חם ומבעבע מול החוף הדרומי.'},
+ {id:'dyer',name:'האי של דייר',ic:'🏝️',x:130,y:565,re:/האי של דייר/,d:'האי שבו גר מילטון דייר, ממציא המשחק פריים אמפייר.'},
+ {id:'dark',name:'האי האפל',ic:'🌑',x:940,y:420,re:/האי האפל|אי החשכה/,d:'אי חשוך מעבר לים האינסופי.'}
+];
+const REALMS=[
+ {id:'cursed',name:'הממלכה המקוללת',ic:'👻',re:/הממלכה המקללת|עולם הקללה/,d:'העולם של רוחות הרפאים, שממנו הגיע מורו.'},
+ {id:'cloud',name:'ממלכת העננים',ic:'☁️',re:/ממלכת העננים/,d:'עולם שמימי מעל העננים, שבו כותבים את הסיפורים.'},
+ {id:'djinn',name:"ג'ינג'אגו",ic:'🧞',re:/ג'ינג'אגו/,d:'העולם של הג\'ינים, שממנו בא נדאקאן.'},
+ {id:'first',name:'הממלכה הראשונה',ic:'🐉',re:/הממלכה הראשונה|ממלכת האוני/,d:'ממלכת האוני והדרקונים – העולם שבו לויד נלחם בצידים.'},
+ {id:'never',name:'הממלכה שאין ממנה חזרה',ic:'❄️',re:/הממלכה שאין ממנה|הממלכה הקפואה/,also:(sid,i)=>sid==='ninjago-s11'&&i>=15,no:['ninjago-s11:18','ninjago-s11:25'],d:'עולם קפוא ושלג. שם זיין היה קיסר הקרח.'},
+ {id:'prime',name:'פריים אמפייר',ic:'🎮',re:/פריים אמפייר/,d:'העולם שבתוך משחק הווידאו של מילטון דייר.'}
+];
+const NIQ=/[֑-ׇ]/g;
+let mapIndex=null, mapFrom='libScreen', mapHot=new Set(), mapSel=null;
+function mapBuild(){
+  if(mapIndex) return mapIndex;
+  mapIndex={};
+  const all=PLACES.concat(REALMS);
+  all.forEach(p=>mapIndex[p.id]=[]);
+  BUILTIN.forEach(s=>s.episodes.forEach((e,i)=>{
+    const tx=(e.title+'\n'+e.paras.join('\n')).replace(NIQ,'');
+    all.forEach(p=>{ if(p.no && (p.no.includes(s.id)||p.no.includes(s.id+':'+i))) return; if(p.re.test(tx)||(p.also&&p.also(s.id,i))) mapIndex[p.id].push({s:s.id,i}); });
+  }));
+  return mapIndex;
+}
+function epPlaces(sid,i){ const ix=mapBuild(); return Object.keys(ix).filter(k=>ix[k].some(x=>x.s===sid&&x.i===i)); }
+function openMap(from){
+  stopRec(); mapFrom=from||'libScreen'; mapBuild(); mapSel=null;
+  mapHot=new Set(mapFrom==='rdScreen'?epPlaces(cur.story,cur.ep):[]);
+  const note=$('mapNote');
+  if(mapFrom==='rdScreen'){
+    const s=story(), e=s&&s.episodes[cur.ep];
+    const names=PLACES.concat(REALMS).filter(p=>mapHot.has(p.id)).map(p=>p.name);
+    note.innerHTML=''; const b=document.createElement('b'); b.textContent=(e?e.short+' – ':'');
+    note.appendChild(b);
+    note.appendChild(document.createTextNode(names.length?'הפרק קורה ב: '+names.join(', '):'בפרק הזה לא מוזכר מקום שמופיע על המפה.'));
+  } else note.textContent='לוחצים על מקום כדי לראות באילו פרקים הוא מופיע. מקומות שעוד לא הופיעו בסיפורים – חיוורים.';
+  mapDraw(); mapShowPanel(mapHot.size?[...mapHot][0]:null);
+  show('mapScreen');
+}
+function mapDraw(){
+  const ix=mapIndex, g=document.getElementById('mpins'); g.innerHTML='';
+  const NS='http://www.w3.org/2000/svg';
+  PLACES.forEach(p=>{
+    const a=document.createElementNS(NS,'g'); a.setAttribute('class','pl'+(ix[p.id].length?'':' empty')+(mapHot.has(p.id)?' hot':'')+(mapSel===p.id?' sel':''));
+    a.setAttribute('transform','translate('+p.x+' '+p.y+')'); a.setAttribute('role','button'); a.setAttribute('tabindex','0');
+    a.setAttribute('aria-label',p.name);
+    a.innerHTML='<circle class="ring" r="26"/><circle class="dot" r="26"/><text class="ic" y="1"></text><text class="lb" y="48"></text>';
+    a.querySelector('.ic').textContent=p.ic; a.querySelector('.lb').textContent=p.name;
+    a.onclick=()=>mapShowPanel(p.id);
+    a.onkeydown=ev=>{ if(ev.key==='Enter'||ev.key===' '){ ev.preventDefault(); mapShowPanel(p.id); } };
+    g.appendChild(a);
+  });
+  const r=$('mapRealms'); r.innerHTML='<span class="rt">🌀 עולמות אחרים:</span>';
+  REALMS.forEach(p=>{
+    const b=document.createElement('button'); b.className='realm'+(ix[p.id].length?'':' empty')+(mapHot.has(p.id)?' hot':'')+(mapSel===p.id?' sel':'');
+    b.textContent=p.ic+' '+p.name; b.onclick=()=>mapShowPanel(p.id); r.appendChild(b);
+  });
+}
+function mapShowPanel(id){
+  const pn=$('mapPanel'); mapSel=id; mapDraw();
+  if(!id){ pn.hidden=true; return; }
+  const p=PLACES.concat(REALMS).find(x=>x.id===id); pn.hidden=false; pn.innerHTML='';
+  const h=document.createElement('h3'); h.textContent=p.ic+' '+p.name; pn.appendChild(h);
+  const d=document.createElement('p'); d.textContent=p.d; pn.appendChild(d);
+  const list=mapIndex[id];
+  const box=document.createElement('div'); box.className='eps';
+  if(!list.length){ const n=document.createElement('p'); n.textContent='המקום הזה עוד לא הופיע בסיפורים שבאתר.'; pn.appendChild(n); return; }
+  let last='';
+  list.forEach(x=>{
+    const s=findStory(x.s), e=s.episodes[x.i];
+    if(x.s!==last){ const sn=document.createElement('div'); sn.className='sn'; sn.textContent=s.title; box.appendChild(sn); last=x.s; }
+    const b=document.createElement('button'); b.className='ep';
+    const lk=!!seasonLock(s)||epLocked(x.s,x.i);
+    if(lk) b.classList.add('locked'); if(epDone(x.s,x.i)) b.classList.add('read');
+    b.textContent=(lk?'🔒 ':epDone(x.s,x.i)?'✓ ':'')+e.short+' · '+rn(e.title);
+    b.onclick=lk?()=>toast('הפרק הזה עוד נעול'):()=>{
+      cur.story=x.s; const pr=progress[x.s];
+      if(pr && pr.ep===x.i){ cur.ep=x.i; cur.para=pr.para; cur.word=pr.word; } else { cur.ep=x.i; cur.para=0; cur.word=0; }
+      openReader(); };
+    box.appendChild(b);
+  });
+  pn.appendChild(box);
+}
+$('openMap').onclick=()=>openMap('libScreen');
+$('rdMap').onclick=()=>{ saveProg(); openMap('rdScreen'); };
+$('mapBack').onclick=()=>{ if(mapFrom==='rdScreen') openReader(); else renderLibrary(); };
 
 renderLibrary();
 </script>
