@@ -616,7 +616,17 @@ const BUILTIN = [{"id": "ninjago-s5", "title": "נינג'גו – עונה 5", "
 /* ---------- storage ---------- */
 const LS={get(k,d){try{const v=localStorage.getItem(k);return v?JSON.parse(v):d}catch(e){return d}},
           set(k,v){try{localStorage.setItem(k,JSON.stringify(v))}catch(e){}}};
+function splitLongPara(p,max){
+  max=max||70; const words=p.split(/\s+/); if(words.length<=max) return [p];
+  const sents=p.split(/(?<=[.!?:׃…])\s+/), out=[]; let cur=[];
+  const flush=()=>{ if(cur.length){ out.push(cur.join(' ')); cur=[]; } };
+  sents.forEach(s=>{ const w=s.split(/\s+/);
+    if(w.length>max){ flush(); for(let i=0;i<w.length;i+=max) out.push(w.slice(i,i+max).join(' ')); return; }
+    if(cur.join(' ').split(/\s+/).length+w.length>max) flush(); cur.push(s); });
+  flush(); return out;
+}
 let userStories=LS.get('srp-stories',[]);
+(function(){ let ch=false; userStories.forEach(s=>(s.episodes||[]).forEach(e=>{ if((e.paras||[]).some(p=>p.split(/\s+/).length>100)){ e.paras=e.paras.flatMap(p=>splitLongPara(p)); ch=true; } })); if(ch) LS.set('srp-stories',userStories); })();
 let flags=LS.get('srp-flags',[]);   // words marked as a mistake in the text: {s,e,p,i,word,sentence,note,t}
 let chal=LS.get('srp-chal',{});         // challenge words: key -> {text, got, loc}
 let mastered=LS.get('srp-mastered',{}); // key -> {text, t}
@@ -1609,9 +1619,10 @@ function parseStory(title,text){
       const n=Math.max(2,Math.round(total/3500)), target=total/n, out=[]; let cur=[],len=0;
       all.forEach(p=>{ cur.push(p); len+=p.length; if(len>=target&&out.length<n-1){ out.push(cur); cur=[]; len=0; } });
       if(cur.length) out.push(cur);
-      return out.map((ps,i)=>({title:'חלק '+(i+1),sub:'',short:'חלק '+(i+1),paras:ps}));
+      return out.map((ps,i)=>({title:'חלק '+(i+1),sub:'',short:'חלק '+(i+1),paras:ps.flatMap(p=>splitLongPara(p))}));
     }
   }
+  eps.forEach(e=>{ e.paras=e.paras.flatMap(p=>splitLongPara(p)); });
   return eps.filter(e=>e.paras.length);
 }
 $('addCancel').onclick=()=>{ $('addOverlay').hidden=true; };
