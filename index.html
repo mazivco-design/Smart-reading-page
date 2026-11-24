@@ -616,6 +616,7 @@ const BUILTIN = [{"id": "ninjago-s5", "title": "נינג'גו – עונה 5", "
 /* ---------- storage ---------- */
 const LS={get(k,d){try{const v=localStorage.getItem(k);return v?JSON.parse(v):d}catch(e){return d}},
           set(k,v){try{localStorage.setItem(k,JSON.stringify(v))}catch(e){}}};
+const stripBidi=s=>s.replace(/[\u200E\u200F\u061C\u202A-\u202E\u2066-\u2069\uFEFF]/g,'');
 function splitLongPara(p,max){
   max=max||70; const words=p.split(/\s+/); if(words.length<=max) return [p];
   const sents=p.split(/(?<=[.!?:׃…])\s+/), out=[]; let cur=[];
@@ -626,7 +627,7 @@ function splitLongPara(p,max){
   flush(); return out;
 }
 let userStories=LS.get('srp-stories',[]);
-(function(){ let ch=false; userStories.forEach(s=>(s.episodes||[]).forEach(e=>{ if((e.paras||[]).some(p=>p.split(/\s+/).length>100)){ e.paras=e.paras.flatMap(p=>splitLongPara(p)); ch=true; } })); if(ch) LS.set('srp-stories',userStories); })();
+(function(){ let ch=false; userStories.forEach(s=>(s.episodes||[]).forEach(e=>{ if((e.paras||[]).some(p=>stripBidi(p)!==p)){ e.paras=e.paras.map(stripBidi); ch=true; } if((e.paras||[]).some(p=>p.split(/\s+/).length>100)){ e.paras=e.paras.flatMap(p=>splitLongPara(p)); ch=true; } })); if(ch) LS.set('srp-stories',userStories); })();
 let flags=LS.get('srp-flags',[]);   // words marked as a mistake in the text: {s,e,p,i,word,sentence,note,t}
 let chal=LS.get('srp-chal',{});         // challenge words: key -> {text, got, loc}
 let mastered=LS.get('srp-mastered',{}); // key -> {text, t}
@@ -1597,6 +1598,7 @@ function removeP(p){ practice=practice.filter(x=>x!==p); LS.set('srp-practice',p
 /* ---------- add a story ---------- */
 function parseStory(title,text){
   const clean=l=>l.replace(/\s*\([A-Za-z][^)]*\)/g,'').trim();
+  text=stripBidi(text);
   const lines=text.split(/\n+/).map(l=>l.trim()).filter(Boolean);
   const isHead=l=>l.length<140 && (/^(פרק|עונה)/.test(norm(l.split(/\s+/)[0])) || /^chapter\b/i.test(l) || /^[א-ת][׳']$/.test(l) || /^\d{1,3}[.)]?$/.test(l));
   const hTitle=h=>/^(פרק|עונה|chapter)/i.test(h)?h:'פרק '+h.replace(/[.)]$/,'');
@@ -2067,7 +2069,7 @@ $('pdfFile').onchange=async ev=>{
     try{
       const buf=await f.arrayBuffer(); let txt=new TextDecoder('utf-8').decode(buf);
       if(txt.includes('\uFFFD')) txt=new TextDecoder('windows-1255').decode(buf);
-      txt=txt.replace(/^\uFEFF/,'').replace(/\r/g,'');
+      txt=stripBidi(txt).replace(/\r/g,'');
       $('addText').value=txt; if(!$('addTitle').value.trim()) $('addTitle').value=f.name.replace(/\.txt$/i,'');
       st.textContent='הטקסט נקרא. כדאי לעבור עליו לפני ההוספה.';
     }catch(e){ st.textContent=''; $('addErr').textContent='לא הצלחתי לקרוא את הקובץ.'; }
@@ -2082,7 +2084,7 @@ $('pdfFile').onchange=async ev=>{
       pages.push(tc.items.map(i=>({s:i.str,x:i.transform[4],y:i.transform[5]})));
       st.textContent='קורא… '+n+' מתוך '+pdf.numPages;
     }
-    const txt=pdfToText(pages);
+    const txt=stripBidi(pdfToText(pages));
     if(txt.replace(/\s/g,'').length<20){ st.textContent=''; $('addErr').textContent='לא נמצא טקסט בקובץ. כנראה הוא סרוק (תמונות), ולכן אי אפשר לקרוא אותו כאן.'; return; }
     $('addText').value=txt;
     if(!$('addTitle').value.trim()) $('addTitle').value=f.name.replace(/\.pdf$/i,'');
