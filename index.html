@@ -460,6 +460,8 @@ footer.ctl{display:flex;flex-direction:column;align-items:center;gap:10px;paddin
   <div class="box">
     <h2>הוספת סיפור</h2>
     <p>מדביקים את הטקסט. כל שורה היא קטע אחד במסך. שורה שמתחילה במילה "פרק" או "עונה" פותחת פרק חדש. אפשר להדביק טקסט מנוקד.</p>
+    <div class="row" style="margin-bottom:8px"><button class="btn" id="pdfBtn" type="button">📄 העלה קובץ PDF</button><span class="status" id="pdfSt" style="align-self:center"></span></div>
+    <input type="file" id="pdfFile" accept="application/pdf,.pdf" hidden>
     <label for="addTitle">שם הסיפור</label>
     <input type="text" id="addTitle" placeholder="למשל: נינג'גו – עונה 5, פרקים 7–9">
     <label for="addText">הטקסט</label>
@@ -2010,6 +2012,52 @@ function mapShowPanel(id){
 $('openMap').onclick=()=>openMap('libScreen');
 $('rdMap').onclick=()=>{ saveProg(); openMap('rdScreen'); };
 $('mapBack').onclick=()=>{ if(mapFrom==='rdScreen') openReader(); else renderLibrary(); };
+
+/* ===== PDF import ===== */
+function pdfToText(pages){
+  // pages: array of arrays of {s:string,x:number,y:number}; returns paragraphs text, one per line
+  const out=[];
+  pages.forEach(items=>{
+    const rows=[];
+    items.forEach(it=>{ if(!it.s.trim()) return;
+      let r=rows.find(r=>Math.abs(r.y-it.y)<3); if(!r){ r={y:it.y,its:[]}; rows.push(r); } r.its.push(it); });
+    rows.sort((a,b)=>b.y-a.y);
+    const lines=rows.map(r=>{ const rtl=r.its.filter(i=>/[\u0590-\u05FF]/.test(i.s)).length>r.its.length/2;
+      const its=r.its.slice().sort((a,b)=>rtl?b.x-a.x:a.x-b.x); return its.map(i=>i.s).join(' ').replace(/\s+/g,' ').replace(/\s+([:.,!?;])/g,'$1').trim(); })
+      .filter(l=>l && !/^[\d\s\-–.]{1,5}$/.test(l));
+    let para='';
+    lines.forEach(l=>{ para=para?para+' '+l:l; if(/[.!?:״"”׃…]\s*$/.test(l)||/^(פרק|עונה)\s/.test(l)&&l.length<60){ out.push(para); para=''; } });
+    if(para){ out.push(para); }
+  });
+  return out.join('\n');
+}
+function loadPdfJs(){
+  if(window.pdfjsLib) return Promise.resolve(window.pdfjsLib);
+  return new Promise((res,rej)=>{ const s=document.createElement('script');
+    s.src='https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js';
+    s.onload=()=>{ pdfjsLib.GlobalWorkerOptions.workerSrc='https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.worker.min.js'; res(pdfjsLib); };
+    s.onerror=()=>rej(new Error('load')); document.head.appendChild(s); });
+}
+$('pdfBtn').onclick=()=>$('pdfFile').click();
+$('pdfFile').onchange=async ev=>{
+  const f=ev.target.files[0]; ev.target.value=''; if(!f) return;
+  const st=$('pdfSt'); st.textContent='קורא את הקובץ…'; $('addErr').textContent='';
+  try{
+    const lib=await loadPdfJs();
+    const pdf=await lib.getDocument({data:await f.arrayBuffer()}).promise;
+    const pages=[];
+    for(let n=1;n<=pdf.numPages;n++){
+      const pg=await pdf.getPage(n); const tc=await pg.getTextContent();
+      pages.push(tc.items.map(i=>({s:i.str,x:i.transform[4],y:i.transform[5]})));
+      st.textContent='קורא… '+n+' מתוך '+pdf.numPages;
+    }
+    const txt=pdfToText(pages);
+    if(txt.replace(/\s/g,'').length<20){ st.textContent=''; $('addErr').textContent='לא נמצא טקסט בקובץ. כנראה הוא סרוק (תמונות), ולכן אי אפשר לקרוא אותו כאן.'; return; }
+    $('addText').value=txt;
+    if(!$('addTitle').value.trim()) $('addTitle').value=f.name.replace(/\.pdf$/i,'');
+    st.textContent='הטקסט נקרא ('+pdf.numPages+' עמודים). כדאי לעבור עליו ולתקן לפני ההוספה.';
+  }catch(e){ st.textContent=''; $('addErr').textContent='לא הצלחתי לקרוא את הקובץ. בדוק שיש חיבור לאינטרנט ושהקובץ תקין.'; }
+};
 
 renderLibrary();
 </script>
