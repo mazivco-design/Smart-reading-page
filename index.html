@@ -82,6 +82,11 @@ button:focus-visible,input:focus-visible,textarea:focus-visible{outline:3px soli
 .story.folder .ficon{font-size:54px;line-height:1}
 .foldhead{grid-column:1/-1;display:flex;gap:12px;align-items:center}
 .foldhead h2{margin:0;font-size:24px;color:var(--accent)}
+.edrow{display:flex;gap:8px;align-items:center;flex-wrap:wrap;background:var(--paper);border:2px solid var(--line);border-radius:16px;padding:10px}
+.edrow input{font-size:18px;padding:8px 10px;border:2px solid var(--line);border-radius:10px;background:var(--bg);color:var(--ink);min-width:0}
+.edrow .edn{width:110px}.edrow .edt{flex:1;min-width:160px}
+.edrow .btn{font-size:15px;padding:8px 12px}
+.splitp{background:var(--paper);border:2px solid var(--line);border-radius:12px;padding:10px 12px;text-align:start;font-size:17px}
 .story.add{border-style:dashed;align-items:center;justify-content:center;color:var(--muted);font-size:20px;font-weight:600}
 .del{position:absolute;top:10px;left:10px;border:none;background:none;color:var(--muted);font-size:15px;padding:6px 8px;border-radius:10px}
 .del.armed{background:var(--accent);color:#fff}
@@ -353,6 +358,7 @@ footer.ctl{display:flex;flex-direction:column;align-items:center;gap:10px;paddin
   <div class="top">
     <button class="btn" id="epBack">→ ספרייה</button>
     <h2 id="epTitle"></h2>
+    <button class="btn" id="epEdit" hidden>✏️ ערוך פרקים</button>
   </div>
   <div class="scroll"><div class="eplist" id="epList"></div></div>
 </section>
@@ -362,6 +368,7 @@ footer.ctl{display:flex;flex-direction:column;align-items:center;gap:10px;paddin
   <div class="top">
     <button class="btn" id="rdBack">→ פרקים</button>
     <div class="eptag"><b id="epLabel"></b><span id="epName"></span></div>
+    <button class="btn" id="rdSplit" hidden>✂️ פצל כאן</button>
     <button class="btn" id="rdMap" aria-label="איפה הפרק קורה – מפה">🗺️</button>
     <span class="stars" id="starsRd">⭐ 0</span>
     <button class="btn warn" id="rdPractice">לתרגול<span class="badge" id="pBadge2">0</span></button>
@@ -456,6 +463,14 @@ footer.ctl{display:flex;flex-direction:column;align-items:center;gap:10px;paddin
   </div>
 </div>
 
+<div class="overlay" id="splitOverlay" hidden>
+  <div class="box">
+    <h2>פיצול פרק</h2>
+    <p>לוחצים על הפסקה שתהיה תחילת הפרק החדש.</p>
+    <div id="splitList" style="max-height:55vh;overflow:auto;display:flex;flex-direction:column;gap:8px"></div>
+    <div class="row"><button class="btn" id="splitCancel">ביטול</button></div>
+  </div>
+</div>
 <div class="overlay" id="addOverlay" hidden>
   <div class="box">
     <h2>הוספת סיפור</h2>
@@ -1013,12 +1028,15 @@ function renderLibrary(){
 
 /* ---------- episodes ---------- */
 let cur={story:null,ep:0,para:0,word:0};
+let epEditMode=false;
 function openStory(id){
   stopRec();
   const s=findStory(id); if(!s) return renderLibrary();
   cur.story=id; $('epTitle').textContent=s.title;
   const pr=progress[id];
   const list=$('epList'); list.innerHTML='';
+  const isU=/^u/.test(id); $('epEdit').hidden=!isU; $('epEdit').textContent=(epEditMode&&isU)?'✔ סיום עריכה':'✏️ ערוך פרקים';
+  if(epEditMode&&isU){ renderEpEditor(id,s,list); show('epScreen'); return; }
   s.episodes.forEach((ep,i)=>{
     const b=document.createElement('button'); b.className='epbtn';
     b.innerHTML='<span class="num"></span><span class="t"></span>';
@@ -1139,6 +1157,7 @@ function loadPara(){
   const season=(norm(ep.sub||'').match(/\d+/)||[])[0];
   $('epLabel').textContent=(season?'עונה '+season+' · ':s.title+' · ')+ep.short;
   $('epName').textContent=rn(ep.title);
+  $('rdSplit').hidden=!/^u/.test(cur.story);
   buildFlow(ep);
   if(cur.para>=ep.paras.length){ cur.para=ep.paras.length-1; cur.word=0; }
   paginate();
@@ -1263,7 +1282,7 @@ $('nextPara').onclick=()=>{
 };
 $('skipBtn').onclick=()=>{ if(pos<words.length){ logWord(pos,'skip'); markOrange(pos,'skip'); advance(); } };
 $('rdBack').onclick=()=>openStory(cur.story);
-$('epBack').onclick=renderLibrary;
+$('epBack').onclick=()=>{ epEditMode=false; renderLibrary(); };
 
 /* ---------- hear a word ---------- */
 /* iPad Safari: speech must be "unlocked" once from a touch, the utterance must be kept alive,
@@ -2035,6 +2054,71 @@ function mapShowPanel(id){
 $('openMap').onclick=()=>openMap('libScreen');
 $('rdMap').onclick=()=>{ saveProg(); openMap('rdScreen'); };
 $('mapBack').onclick=()=>{ if(mapFrom==='rdScreen') openReader(); else renderLibrary(); };
+
+/* ===== chapter editor (own stories) ===== */
+function saveEdits(){ LS.set('srp-stories',userStories); LS.set('srp-progress',progress); LS.set('srp-done',doneEps); LS.set('srp-practice',practice); LS.set('srp-flags',flags); LS.set('srp-chal',chal); }
+function remapLocs(id,fn){ // fn(e,p) -> [e,p]
+  const f=o=>{ if(o&&o.s===id){ const r=fn(o.e,o.p); o.e=r[0]; o.p=r[1]; } };
+  practice.forEach(x=>{ if(x.loc&&x.loc.s===id){ const r=fn(x.loc.e,x.loc.p); x.loc.e=r[0]; x.loc.p=r[1]; } });
+  flags.forEach(f);
+  Object.keys(chal).forEach(k=>{ const l=chal[k]&&chal[k].loc; if(l&&l.s===id){ const r=fn(l.e,l.p); l.e=r[0]; l.p=r[1]; } });
+}
+function renumberIfPlain(s){
+  const plain=s.episodes.every(e=>/^פרק \d+$/.test(e.short));
+  if(plain) s.episodes.forEach((e,i)=>{ const was=e.short; e.short='פרק '+(i+1); if(e.title===was||/^פרק \d+$/.test(e.title)) e.title=e.short; });
+}
+function splitEpisode(id,i,p0){
+  const s=findStory(id), ep=s.episodes[i]; if(!ep||p0<1||p0>=ep.paras.length) return false;
+  const plainBefore=s.episodes.every((e,k)=>e.short==='פרק '+(k+1));
+  const ne={title:'פרק '+(i+2),sub:'',short:'פרק '+(i+2),paras:ep.paras.slice(p0)};
+  ep.paras=ep.paras.slice(0,p0); s.episodes.splice(i+1,0,ne);
+  const pr=progress[id]; if(pr){ if(pr.ep>i) pr.ep++; else if(pr.ep===i&&pr.para>=p0){ pr.ep=i+1; pr.para-=p0; } }
+  if(doneEps[id]) doneEps[id]=doneEps[id].map(k=>k>i?k+1:k);
+  remapLocs(id,(e,p)=> e>i?[e+1,p]:(e===i&&p>=p0?[i+1,p-p0]:[e,p]));
+  if(plainBefore) renumberIfPlain(s);
+  saveEdits(); return true;
+}
+function mergeEpisode(id,i){
+  const s=findStory(id); if(i<1||!s.episodes[i]) return false;
+  const plainBefore=s.episodes.every((e,k)=>e.short==='פרק '+(k+1));
+  const prev=s.episodes[i-1], len=prev.paras.length;
+  prev.paras=prev.paras.concat(s.episodes[i].paras); s.episodes.splice(i,1);
+  const pr=progress[id]; if(pr){ if(pr.ep>i) pr.ep--; else if(pr.ep===i){ pr.ep=i-1; pr.para+=len; } }
+  if(doneEps[id]) doneEps[id]=doneEps[id].filter(k=>k!==i).map(k=>k>i?k-1:k);
+  remapLocs(id,(e,p)=> e>i?[e-1,p]:(e===i?[i-1,p+len]:[e,p]));
+  if(plainBefore) renumberIfPlain(s);
+  saveEdits(); return true;
+}
+function openSplit(id,i){
+  const ep=findStory(id).episodes[i], box=$('splitList'); box.innerHTML='';
+  ep.paras.forEach((p,k)=>{ if(k===0) return;
+    const b=document.createElement('button'); b.className='splitp'; b.textContent=(k+1)+'. '+p.split(/\s+/).slice(0,10).join(' ')+'…';
+    b.onclick=()=>{ $('splitOverlay').hidden=true; if(splitEpisode(id,i,k)){ toast('הפרק פוצל'); openStory(id); } };
+    box.appendChild(b); });
+  $('splitOverlay').hidden=false; box.scrollTop=0;
+}
+function renderEpEditor(id,s,list){
+  s.episodes.forEach((ep,i)=>{
+    const r=document.createElement('div'); r.className='edrow';
+    const n=document.createElement('input'); n.className='edn'; n.value=ep.short; n.setAttribute('aria-label','מספר הפרק');
+    n.onchange=()=>{ ep.short=n.value.trim()||ep.short; saveEdits(); };
+    const tt=document.createElement('input'); tt.className='edt'; tt.value=ep.title; tt.setAttribute('aria-label','שם הפרק');
+    tt.onchange=()=>{ ep.title=tt.value.trim()||ep.title; saveEdits(); };
+    const sp=document.createElement('button'); sp.className='btn'; sp.textContent='✂️ פצל…'; sp.onclick=()=>openSplit(id,i);
+    r.appendChild(n); r.appendChild(tt); r.appendChild(sp);
+    if(i>0){ const m=document.createElement('button'); m.className='btn'; m.textContent='⤴ אחד עם הקודם';
+      m.onclick=()=>armButton(m,'לאחד?',()=>{ mergeEpisode(id,i); openStory(id); }); r.appendChild(m); }
+    list.appendChild(r);
+  });
+}
+$('epEdit').onclick=()=>{ epEditMode=!epEditMode; openStory(cur.story); };
+$('splitCancel').onclick=()=>{ $('splitOverlay').hidden=true; };
+$('rdSplit').onclick=()=>{
+  const id=cur.story; if(!/^u/.test(id)) return;
+  const p=(words&&words[pos])?words[pos].p:cur.para;
+  if(p<1){ toast('אי אפשר לפצל בתחילת הפרק'); return; }
+  armButton($('rdSplit'),'לפצל כאן?',()=>{ const i=cur.ep; if(splitEpisode(id,i,p)){ cur.ep=i+1; cur.para=0; cur.word=0; toast('הפרק פוצל. ממשיכים בפרק החדש'); loadPara(); } });
+};
 
 /* ===== PDF import ===== */
 function pdfToText(pages){
