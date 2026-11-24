@@ -70,6 +70,18 @@ button:focus-visible,input:focus-visible,textarea:focus-visible{outline:3px soli
 .story .cover svg,.story .cover img{width:100%;height:100%;display:block;object-fit:cover}
 .story .picbtns{position:absolute;top:8px;left:8px;display:flex;gap:6px}
 .story .picbtns span{background:rgba(255,255,255,.85);color:#1d2433;border-radius:12px;padding:6px 10px;font-size:15px;font-weight:600}
+.grid.fold{grid-template-columns:repeat(auto-fill,minmax(150px,1fr));gap:10px}
+.fold .story{padding:10px 12px;min-height:0;border-radius:16px;gap:2px}
+.fold .story h3{font-size:17px}
+.fold .story p{font-size:13px}
+.fold .story .cont{font-size:13px}
+.fold .story .cover{margin:-10px -12px 4px;height:52px;border-radius:14px 14px 0 0}
+.fold .story .picbtns{top:4px;left:4px}
+.fold .story .picbtns span{padding:3px 7px;font-size:12px}
+.story.folder{min-height:120px;align-items:center;justify-content:center;text-align:center;border-color:var(--accent);gap:6px}
+.story.folder .ficon{font-size:54px;line-height:1}
+.foldhead{grid-column:1/-1;display:flex;gap:12px;align-items:center}
+.foldhead h2{margin:0;font-size:24px;color:var(--accent)}
 .story.add{border-style:dashed;align-items:center;justify-content:center;color:var(--muted);font-size:20px;font-weight:600}
 .del{position:absolute;top:10px;left:10px;border:none;background:none;color:var(--muted);font-size:15px;padding:6px 8px;border-radius:10px}
 .del.armed{background:var(--accent);color:#fff}
@@ -926,10 +938,27 @@ $('coverFile').onchange=e=>{
 };
 
 /* ---------- library ---------- */
+let libFolder=false;
+const isNinj=s=>/^ninjago-/.test(s.id);
 function renderLibrary(){
   stopRec(); badges();
-  const g=$('storyGrid'); g.innerHTML='';
-  allStories().forEach(s=>{
+  const g=$('storyGrid'); g.innerHTML=''; g.classList.toggle('fold',libFolder);
+  const all=allStories(), ninj=all.filter(isNinj);
+  if(libFolder){
+    const hd=document.createElement('div'); hd.className='foldhead';
+    const bk=document.createElement('button'); bk.className='btn'; bk.textContent='→ ספרייה';
+    bk.onclick=()=>{ libFolder=false; renderLibrary(); };
+    const h=document.createElement('h2'); h.textContent="🥷 נינג'גו";
+    hd.appendChild(bk); hd.appendChild(h); g.appendChild(hd);
+  } else if(ninj.length){
+    const f=document.createElement('button'); f.className='story folder';
+    f.innerHTML='<span class="ficon">📁</span><h3></h3><p></p>';
+    f.querySelector('h3').textContent="נינג'גו";
+    f.querySelector('p').textContent=ninj.length+' עונות';
+    f.onclick=()=>{ libFolder=true; renderLibrary(); window.scrollTo(0,0); const sc=document.querySelector('#libScreen .scroll'); if(sc) sc.scrollTop=0; };
+    g.appendChild(f);
+  }
+  all.filter(s=>libFolder?isNinj(s):!isNinj(s)).forEach(s=>{
     const b=document.createElement('button'); b.className='story';
     const pr=progress[s.id];
     b.innerHTML='<h3></h3><p></p>'+(pr?'<span class="cont"></span>':'');
@@ -946,11 +975,12 @@ function renderLibrary(){
         pb.appendChild(rs); }
       b.appendChild(pb);
     }
-    b.querySelector('h3').textContent=s.title;
-    b.querySelector('p').textContent=s.episodes.length+(s.episodes.length===1?' פרק':' פרקים')+(s.note?' · '+s.note:'');
+    const ttl=libFolder?s.title.replace(/^נינג'גו\s*[–-]\s*/,''):s.title;
+    b.querySelector('h3').textContent=ttl;
+    b.querySelector('p').textContent=s.episodes.length+(s.episodes.length===1?' פרק':' פרקים')+(s.note&&!libFolder?' · '+s.note:(libFolder&&/\(/.test(s.note||'')?' · '+s.note.replace(/^.*\(|\)$/g,''):''));
     if(pr && s.episodes[pr.ep]) b.querySelector('.cont').textContent='להמשיך מ'+s.episodes[pr.ep].short;
     const sl=seasonLock(s);
-    if(sl){ b.classList.add('locked'); b.querySelector('h3').textContent='🔒 '+s.title;
+    if(sl){ b.classList.add('locked'); b.querySelector('h3').textContent='🔒 '+ttl;
       b.onclick=()=>toast(stopIx()!=null?'העונה הזאת עוד נעולה':'קודם מסיימים לקרוא את כל הפרקים והחידונים של '+sl.title); }
     else b.onclick=()=>openStory(s.id);
     if(!BUILTIN.includes(s)){
@@ -962,9 +992,9 @@ function renderLibrary(){
     }
     g.appendChild(b);
   });
-  const add=document.createElement('button'); add.className='story add'; add.textContent='+ הוסף סיפור';
+  if(!libFolder){ const add=document.createElement('button'); add.className='story add'; add.textContent='+ הוסף סיפור';
   add.onclick=()=>{ $('addErr').textContent=''; $('addOverlay').hidden=false; };
-  g.appendChild(add);
+  g.appendChild(add); }
   show('libScreen');
 }
 
