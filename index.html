@@ -68,6 +68,9 @@ button:focus-visible,input:focus-visible,textarea:focus-visible{outline:3px soli
 .box select{width:100%;font-size:18px;padding:10px 12px;border:2px solid var(--line);border-radius:12px;background:var(--bg);color:var(--ink);margin-bottom:10px}
 .story .cover{margin:-20px -20px 6px;height:110px;border-radius:18px 18px 0 0;overflow:hidden;background:#223}
 .story .cover svg,.story .cover img{width:100%;height:100%;display:block;object-fit:cover}
+.story .uact{display:flex;gap:6px;flex-wrap:wrap;margin-top:10px}
+.story .uact span{background:rgba(255,255,255,.12);border-radius:12px;padding:6px 10px;font-size:14px;font-weight:600}
+.fold .story .uact span{padding:3px 7px;font-size:12px}
 .story .picbtns{position:absolute;top:8px;left:8px;display:flex;gap:6px}
 .story .picbtns span{background:rgba(255,255,255,.85);color:#1d2433;border-radius:12px;padding:6px 10px;font-size:15px;font-weight:600}
 .grid.fold{grid-template-columns:repeat(auto-fill,minmax(150px,1fr));gap:10px}
@@ -477,8 +480,10 @@ footer.ctl{display:flex;flex-direction:column;align-items:center;gap:10px;paddin
     <p>מדביקים את הטקסט. כל שורה היא קטע אחד במסך. שורה שמתחילה במילה "פרק" או "עונה" פותחת פרק חדש. אפשר להדביק טקסט מנוקד.</p>
     <div class="row" style="margin-bottom:8px"><button class="btn" id="pdfBtn" type="button">📄 העלה קובץ (PDF או טקסט)</button><span class="status" id="pdfSt" style="align-self:center"></span></div>
     <input type="file" id="pdfFile" accept="application/pdf,.pdf,text/plain,.txt" multiple hidden>
-    <label for="addTitle">שם הסיפור</label>
-    <input type="text" id="addTitle" placeholder="למשל: נינג'גו – עונה 5, פרקים 7–9">
+    <label for="addGroup">שם הסיפור (לא חובה)</label>
+    <input type="text" id="addGroup" placeholder="למשל: הארי פוטר">
+    <label for="addTitle">שם הספר</label>
+    <input type="text" id="addTitle" placeholder="למשל: האסיר מאזקבאן">
     <label for="addText">הטקסט</label>
     <textarea id="addText"></textarea>
     <div class="status err" id="addErr" style="text-align:start"></div>
@@ -1009,16 +1014,42 @@ $('coverFile').onchange=e=>{
 /* ---------- library ---------- */
 let libFolder=false;
 const isNinj=s=>/^ninjago-/.test(s.id);
+const isUser=s=>/^u/.test(s.id);
+const grpOf=s=>isUser(s)&&s.g?s.g:'';
+function pickCover(key){ coverFor=key; $('coverFile').click(); }
+function actSpan(txt,fn){ const x=document.createElement('span'); x.setAttribute('role','button'); x.textContent=txt; x.onclick=ev=>{ ev.stopPropagation(); fn(); }; return x; }
+function renameGroup(name){
+  const to=(prompt('שם חדש לסיפור:',name)||'').trim(); if(!to||to===name) return;
+  userStories.forEach(u=>{ if(u.g===name) u.g=to; });
+  if(covers['g:'+name]){ covers['g:'+to]=covers['g:'+name]; delete covers['g:'+name]; LS.set('srp-covers',covers); }
+  saveStories(); if(libFolder==='g:'+name) libFolder='g:'+to; renderLibrary();
+}
+function renameBook(s){
+  const to=(prompt('שם חדש לספר:',s.title)||'').trim(); if(!to||to===s.title) return;
+  s.title=to; saveStories(); renderLibrary();
+}
+function moveBook(s){
+  const names=[...new Set(userStories.map(u=>u.g).filter(Boolean))];
+  const to=prompt('לאיזה סיפור לשייך את הספר?'+(names.length?'\nסיפורים קיימים: '+names.join(', '):'')+'\n(להשאיר ריק כדי להוציא מסיפור)',s.g||'');
+  if(to===null) return; const t=to.trim();
+  if(t) s.g=t; else delete s.g;
+  saveStories(); if(typeof libFolder==='string'&&!userStories.some(u=>u.g===libFolder.slice(2))) libFolder=false; renderLibrary();
+}
 function renderLibrary(){
   stopRec(); badges();
-  const g=$('storyGrid'); g.innerHTML=''; g.classList.toggle('fold',libFolder);
+  const g=$('storyGrid'); g.innerHTML=''; g.classList.toggle('fold',!!libFolder);
   const all=allStories(), ninj=all.filter(isNinj);
   if(libFolder){
     const hd=document.createElement('div'); hd.className='foldhead';
     const bk=document.createElement('button'); bk.className='btn'; bk.textContent='→ ספרייה';
     bk.onclick=()=>{ libFolder=false; renderLibrary(); };
-    const h=document.createElement('h2'); h.textContent="🥷 נינג'גו";
-    hd.appendChild(bk); hd.appendChild(h); g.appendChild(hd);
+    const h=document.createElement('h2'); h.textContent=(typeof libFolder==='string')?libFolder.slice(2):"🥷 נינג'גו";
+    hd.appendChild(bk); hd.appendChild(h);
+    if(typeof libFolder==='string'){ const gn=libFolder.slice(2);
+      const r1=document.createElement('button'); r1.className='btn'; r1.textContent='✏️ שם'; r1.onclick=()=>renameGroup(gn);
+      const r2=document.createElement('button'); r2.className='btn'; r2.textContent='🖼 תמונה'; r2.onclick=()=>pickCover('g:'+gn);
+      hd.appendChild(r1); hd.appendChild(r2); }
+    g.appendChild(hd);
   } else if(ninj.length){
     const f=document.createElement('button'); f.className='story folder';
     f.innerHTML='<span class="ficon">📁</span><h3></h3><p></p>';
@@ -1027,7 +1058,22 @@ function renderLibrary(){
     f.onclick=()=>{ libFolder=true; renderLibrary(); window.scrollTo(0,0); const sc=document.querySelector('#libScreen .scroll'); if(sc) sc.scrollTop=0; };
     g.appendChild(f);
   }
-  all.filter(s=>libFolder?isNinj(s):!isNinj(s)).forEach(s=>{
+  if(!libFolder){
+    [...new Set(userStories.map(u=>u.g).filter(Boolean))].forEach(gn=>{
+      const books=userStories.filter(u=>u.g===gn);
+      const f=document.createElement('button'); f.className='story folder';
+      f.innerHTML='<span class="ficon">📁</span><h3></h3><p></p>';
+      f.querySelector('h3').textContent=gn;
+      f.querySelector('p').textContent=books.length+(books.length===1?' ספר':' ספרים');
+      if(covers['g:'+gn]){ const cv=document.createElement('div'); cv.className='cover'; const im=document.createElement('img'); im.src=covers['g:'+gn]; im.alt=''; cv.appendChild(im); f.prepend(cv); }
+      const ua=document.createElement('div'); ua.className='uact';
+      ua.appendChild(actSpan('✏️ שם',()=>renameGroup(gn))); ua.appendChild(actSpan('🖼 תמונה',()=>pickCover('g:'+gn)));
+      f.appendChild(ua);
+      f.onclick=()=>{ libFolder='g:'+gn; renderLibrary(); window.scrollTo(0,0); const sc=document.querySelector('#libScreen .scroll'); if(sc) sc.scrollTop=0; };
+      g.appendChild(f);
+    });
+  }
+  all.filter(s=>libFolder===true?isNinj(s):(typeof libFolder==='string'?(isUser(s)&&s.g===libFolder.slice(2)):(!isNinj(s)&&!grpOf(s)))).forEach(s=>{
     const b=document.createElement('button'); b.className='story';
     const pr=progress[s.id];
     b.innerHTML='<h3></h3><p></p>'+(pr?'<span class="cont"></span>':'');
@@ -1044,15 +1090,18 @@ function renderLibrary(){
         pb.appendChild(rs); }
       b.appendChild(pb);
     }
-    const ttl=libFolder?s.title.replace(/^נינג'גו\s*[–-]\s*/,''):s.title;
+    const ttl=libFolder===true?s.title.replace(/^נינג'גו\s*[–-]\s*/,''):s.title;
     b.querySelector('h3').textContent=ttl;
-    b.querySelector('p').textContent=s.episodes.length+(s.episodes.length===1?' פרק':' פרקים')+(s.note&&!libFolder?' · '+s.note:(libFolder&&/\(/.test(s.note||'')?' · '+s.note.replace(/^.*\(|\)$/g,''):''));
+    b.querySelector('p').textContent=s.episodes.length+(s.episodes.length===1?' פרק':' פרקים')+(s.note&&!libFolder?' · '+s.note:(libFolder===true&&/\(/.test(s.note||'')?' · '+s.note.replace(/^.*\(|\)$/g,''):''));
     if(pr && s.episodes[pr.ep]) b.querySelector('.cont').textContent='להמשיך מ'+s.episodes[pr.ep].short;
     const sl=seasonLock(s);
     if(sl){ b.classList.add('locked'); b.querySelector('h3').textContent='🔒 '+ttl;
       b.onclick=()=>toast(stopIx()!=null?'העונה הזאת עוד נעולה':'קודם מסיימים לקרוא את כל הפרקים והחידונים של '+sl.title); }
     else b.onclick=()=>openStory(s.id);
     if(!BUILTIN.includes(s)){
+      const ua=document.createElement('div'); ua.className='uact';
+      ua.appendChild(actSpan('✏️ שם',()=>renameBook(s))); ua.appendChild(actSpan('📁 סיפור',()=>moveBook(s))); ua.appendChild(actSpan('🖼 תמונה',()=>pickCover(s.id)));
+      b.appendChild(ua);
       const d=document.createElement('span'); d.className='del'; d.textContent='מחק'; d.setAttribute('role','button');
       d.onclick=ev=>{ ev.stopPropagation(); armButton(d,'למחוק? לחץ שוב',()=>{
         userStories=userStories.filter(x=>x.id!==s.id); delete progress[s.id];
@@ -1061,8 +1110,8 @@ function renderLibrary(){
     }
     g.appendChild(b);
   });
-  if(!libFolder){ const add=document.createElement('button'); add.className='story add'; add.textContent='+ הוסף סיפור';
-  add.onclick=()=>{ $('addErr').textContent=''; $('addOverlay').hidden=false; };
+  if(libFolder!==true){ const add=document.createElement('button'); add.className='story add'; add.textContent='+ הוסף ספר';
+  add.onclick=()=>{ $('addErr').textContent=''; if(typeof libFolder==='string') $('addGroup').value=libFolder.slice(2); $('addOverlay').hidden=false; };
   g.appendChild(add); }
   show('libScreen');
 }
@@ -1690,12 +1739,12 @@ function parseStory(title,text){
 $('addCancel').onclick=()=>{ $('addOverlay').hidden=true; };
 $('addSave').onclick=()=>{
   const title=$('addTitle').value.trim(), text=$('addText').value;
-  if(!title){ $('addErr').textContent='צריך לתת שם לסיפור.'; return; }
+  if(!title){ $('addErr').textContent='צריך לתת שם לספר.'; return; }
   const eps=parseStory(title,text);
   if(!eps.length){ $('addErr').textContent='לא נמצא טקסט לקריאה. צריך להדביק לפחות שורה אחת.'; return; }
-  const s={id:'u'+Date.now(),title,episodes:eps};
+  const gname=$('addGroup').value.trim(); const s={id:'u'+Date.now(),title,episodes:eps}; if(gname) s.g=gname;
   userStories.push(s); saveStories();
-  $('addOverlay').hidden=true; $('addTitle').value=''; $('addText').value='';
+  $('addOverlay').hidden=true; $('addTitle').value=''; $('addText').value=''; $('addGroup').value='';
   renderLibrary(); toast('הסיפור נוסף לספרייה ('+eps.length+(eps.length===1?' פרק)':' פרקים)'));
 };
 
