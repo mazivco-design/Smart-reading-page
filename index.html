@@ -2151,6 +2151,41 @@ function renderEpEditor(id,s,list){
       m.onclick=()=>armButton(m,'לאחד?',()=>{ mergeEpisode(id,i); openStory(id); }); r.appendChild(m); }
     list.appendChild(r);
   });
+  const ar=document.createElement('div'); ar.className='edrow';
+  const ab=document.createElement('button'); ab.className='btn'; ab.textContent='➕ הוסף פרקים מקבצים';
+  const ast=document.createElement('span'); ast.id='addChSt'; ast.style.cssText='font-size:.9rem;opacity:.8';
+  const af=document.createElement('input'); af.type='file'; af.multiple=true; af.hidden=true; af.accept='application/pdf,.pdf,text/plain,.txt';
+  ab.onclick=()=>af.click();
+  af.onchange=async()=>{ const fs=[...af.files]; af.value=''; if(!fs.length) return; await addChaptersFromFiles(id,fs,ast); openStory(id); };
+  ar.appendChild(ab); ar.appendChild(ast); ar.appendChild(af); list.appendChild(ar);
+}
+async function fileToText(f){
+  if(/\.txt$/i.test(f.name)||f.type==='text/plain'){
+    const buf=await f.arrayBuffer(); let txt=new TextDecoder('utf-8').decode(buf);
+    if(txt.includes('\uFFFD')) txt=new TextDecoder('windows-1255').decode(buf);
+    return stripBidi(txt).replace(/\r/g,'');
+  }
+  const lib=await loadPdfJs();
+  const pdf=await lib.getDocument({data:await f.arrayBuffer()}).promise; const pages=[];
+  for(let n=1;n<=pdf.numPages;n++){ const pg=await pdf.getPage(n); const tc=await pg.getTextContent(); pages.push(tc.items.map(i=>({s:i.str,x:i.transform[4],y:i.transform[5]}))); }
+  return stripBidi(pdfToText(pages));
+}
+async function addChaptersFromFiles(id,files,st){
+  const s=findStory(id); if(!s||!/^u/.test(id)) return;
+  files=files.slice().sort((a,b)=>a.name.localeCompare(b.name,'he',{numeric:true}));
+  let added=0, bad=[];
+  for(let k=0;k<files.length;k++){
+    const f=files[k]; st.textContent='קורא '+(k+1)+' מתוך '+files.length+'…';
+    try{
+      const txt=await fileToText(f);
+      const paras=txt.split(/\n+/).map(l=>l.trim()).filter(Boolean).flatMap(p=>splitLongPara(p));
+      if(paras.join('').replace(/\s/g,'').length<20){ bad.push(f.name); continue; }
+      const n=s.episodes.length+1;
+      s.episodes.push({title:f.name.replace(/\.(pdf|txt)$/i,'').trim()||('פרק '+n),sub:'',short:'פרק '+n,paras}); added++;
+    }catch(e){ bad.push(f.name); }
+  }
+  saveEdits();
+  toast(added?('נוספו '+added+(added===1?' פרק':' פרקים')+(bad.length?'. לא נקראו: '+bad.join(', '):'')):'לא נמצא טקסט בקבצים'+(bad.length?': '+bad.join(', '):''));
 }
 $('epEdit').onclick=()=>{ epEditMode=!epEditMode; openStory(cur.story); };
 $('splitCancel').onclick=()=>{ $('splitOverlay').hidden=true; };
