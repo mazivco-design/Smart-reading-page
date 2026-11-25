@@ -476,7 +476,7 @@ footer.ctl{display:flex;flex-direction:column;align-items:center;gap:10px;paddin
     <h2>הוספת סיפור</h2>
     <p>מדביקים את הטקסט. כל שורה היא קטע אחד במסך. שורה שמתחילה במילה "פרק" או "עונה" פותחת פרק חדש. אפשר להדביק טקסט מנוקד.</p>
     <div class="row" style="margin-bottom:8px"><button class="btn" id="pdfBtn" type="button">📄 העלה קובץ (PDF או טקסט)</button><span class="status" id="pdfSt" style="align-self:center"></span></div>
-    <input type="file" id="pdfFile" accept="application/pdf,.pdf,text/plain,.txt" hidden>
+    <input type="file" id="pdfFile" accept="application/pdf,.pdf,text/plain,.txt" multiple hidden>
     <label for="addTitle">שם הסיפור</label>
     <input type="text" id="addTitle" placeholder="למשל: נינג'גו – עונה 5, פרקים 7–9">
     <label for="addText">הטקסט</label>
@@ -2223,8 +2223,25 @@ function loadPdfJs(){
 }
 $('pdfBtn').onclick=()=>$('pdfFile').click();
 $('pdfFile').onchange=async ev=>{
-  const f=ev.target.files[0]; ev.target.value=''; if(!f) return;
+  const fl=[...ev.target.files]; ev.target.value=''; if(!fl.length) return;
   const st=$('pdfSt'); st.textContent='קורא את הקובץ…'; $('addErr').textContent='';
+  if(fl.length>1){
+    fl.sort((a,b)=>a.name.localeCompare(b.name,'he',{numeric:true}));
+    const parts=[], bad=[];
+    for(let k=0;k<fl.length;k++){
+      st.textContent='קורא '+(k+1)+' מתוך '+fl.length+'…';
+      try{
+        const t=(await fileToText(fl[k])).trim();
+        if(t.replace(/\s/g,'').length<20){ bad.push(fl[k].name); continue; }
+        parts.push('פרק '+(parts.length+1)+': '+fl[k].name.replace(/\.(pdf|txt)$/i,'').trim()+'\n'+t);
+      }catch(e){ bad.push(fl[k].name); }
+    }
+    if(!parts.length){ st.textContent=''; $('addErr').textContent='לא נמצא טקסט בקבצים.'; return; }
+    $('addText').value=parts.join('\n\n');
+    st.textContent='נקראו '+parts.length+' קבצים, כל אחד יהיה פרק.'+(bad.length?' לא נקראו: '+bad.join(', '):'');
+    return;
+  }
+  const f=fl[0];
   if(/\.txt$/i.test(f.name)||f.type==='text/plain'){
     try{
       const buf=await f.arrayBuffer(); let txt=new TextDecoder('utf-8').decode(buf);
