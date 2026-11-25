@@ -641,8 +641,24 @@ function splitLongPara(p,max){
     if(cur.join(' ').split(/\s+/).length+w.length>max) flush(); cur.push(s); });
   flush(); return out;
 }
-let userStories=LS.get('srp-stories',[]);
-(function(){ let ch=false; userStories.forEach(s=>(s.episodes||[]).forEach(e=>{ if((e.paras||[]).some(p=>stripBidi(p)!==p)){ e.paras=e.paras.map(stripBidi); ch=true; } if((e.paras||[]).some(p=>p.split(/\s+/).length>100)){ e.paras=e.paras.flatMap(p=>splitLongPara(p)); ch=true; } })); if(ch) LS.set('srp-stories',userStories); })();
+const STK='srp-st-';
+function loadStories(){ // each uploaded story lives in its own key so that big books still sync to the cloud
+  const m=new Map(); let legacy=LS.get('srp-stories',[]); if(!Array.isArray(legacy)) legacy=[];
+  legacy.forEach(s=>{ if(s&&s.id) m.set(s.id,s); });
+  try{ for(let i=0;i<localStorage.length;i++){ const k=localStorage.key(i);
+    if(k&&k.startsWith(STK)){ try{ const s=JSON.parse(localStorage.getItem(k)); if(s&&s.id) m.set(s.id,s); }catch(e){} } } }catch(e){}
+  return [...m.values()];
+}
+function saveStories(){
+  const keep=new Set(userStories.map(s=>STK+s.id));
+  userStories.forEach(s=>LS.set(STK+s.id,s));
+  try{ const del=[]; for(let i=0;i<localStorage.length;i++){ const k=localStorage.key(i); if(k&&k.startsWith(STK)&&!keep.has(k)) del.push(k); }
+    del.forEach(k=>localStorage.removeItem(k)); }catch(e){}
+  LS.set('srp-stories',[]);
+}
+let userStories=loadStories();
+(function(){ let ch=false; userStories.forEach(s=>(s.episodes||[]).forEach(e=>{ if((e.paras||[]).some(p=>stripBidi(p)!==p)){ e.paras=e.paras.map(stripBidi); ch=true; } if((e.paras||[]).some(p=>p.split(/\s+/).length>100)){ e.paras=e.paras.flatMap(p=>splitLongPara(p)); ch=true; } })); if(ch) saveStories(); })();
+if((LS.get('srp-stories',[])||[]).length) saveStories();   // move old single-key storage to per-story keys
 let flags=LS.get('srp-flags',[]);   // words marked as a mistake in the text: {s,e,p,i,word,sentence,note,t}
 let chal=LS.get('srp-chal',{});         // challenge words: key -> {text, got, loc}
 let mastered=LS.get('srp-mastered',{}); // key -> {text, t}
@@ -1040,7 +1056,7 @@ function renderLibrary(){
       const d=document.createElement('span'); d.className='del'; d.textContent='מחק'; d.setAttribute('role','button');
       d.onclick=ev=>{ ev.stopPropagation(); armButton(d,'למחוק? לחץ שוב',()=>{
         userStories=userStories.filter(x=>x.id!==s.id); delete progress[s.id];
-        LS.set('srp-stories',userStories); LS.set('srp-progress',progress); renderLibrary(); toast('הסיפור נמחק'); }); };
+        saveStories(); LS.set('srp-progress',progress); renderLibrary(); toast('הסיפור נמחק'); }); };
       b.appendChild(d);
     }
     g.appendChild(b);
@@ -1678,7 +1694,7 @@ $('addSave').onclick=()=>{
   const eps=parseStory(title,text);
   if(!eps.length){ $('addErr').textContent='לא נמצא טקסט לקריאה. צריך להדביק לפחות שורה אחת.'; return; }
   const s={id:'u'+Date.now(),title,episodes:eps};
-  userStories.push(s); LS.set('srp-stories',userStories);
+  userStories.push(s); saveStories();
   $('addOverlay').hidden=true; $('addTitle').value=''; $('addText').value='';
   renderLibrary(); toast('הסיפור נוסף לספרייה ('+eps.length+(eps.length===1?' פרק)':' פרקים)'));
 };
@@ -1711,7 +1727,7 @@ $('restoreFile').onchange=e=>{
       stars=Math.max(stars,d.stars||0); wcount=Math.max(wcount,d.wcount||0);
       for(const sid in (d.doneEps||{})){ const a=doneEps[sid]||(doneEps[sid]=[]); d.doneEps[sid].forEach(x=>{ if(!a.includes(x)) a.push(x); }); }
       LS.set('srp-mastered',mastered); LS.set('srp-chal',chal); LS.set('srp-stars',stars); LS.set('srp-wcount',wcount); LS.set('srp-done',doneEps);
-      LS.set('srp-learned',learned); LS.set('srp-stories',userStories); LS.set('srp-practice',practice); LS.set('srp-progress',progress);
+      LS.set('srp-learned',learned); saveStories(); LS.set('srp-practice',practice); LS.set('srp-progress',progress);
       renderLibrary(); toast('הגיבוי שוחזר');
     }catch(err){ toast('הקובץ הזה הוא לא גיבוי של דף הקריאה'); }
     e.target.value='';
@@ -2081,7 +2097,7 @@ $('rdMap').onclick=()=>{ saveProg(); openMap('rdScreen'); };
 $('mapBack').onclick=()=>{ if(mapFrom==='rdScreen') openReader(); else renderLibrary(); };
 
 /* ===== chapter editor (own stories) ===== */
-function saveEdits(){ LS.set('srp-stories',userStories); LS.set('srp-progress',progress); LS.set('srp-done',doneEps); LS.set('srp-practice',practice); LS.set('srp-flags',flags); LS.set('srp-chal',chal); }
+function saveEdits(){ saveStories(); LS.set('srp-progress',progress); LS.set('srp-done',doneEps); LS.set('srp-practice',practice); LS.set('srp-flags',flags); LS.set('srp-chal',chal); }
 function remapLocs(id,fn){ // fn(e,p) -> [e,p]
   const f=o=>{ if(o&&o.s===id){ const r=fn(o.e,o.p); o.e=r[0]; o.p=r[1]; } };
   practice.forEach(x=>{ if(x.loc&&x.loc.s===id){ const r=fn(x.loc.e,x.loc.p); x.loc.e=r[0]; x.loc.p=r[1]; } });
