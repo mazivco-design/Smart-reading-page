@@ -657,8 +657,7 @@ function loadStories(){ // each uploaded story lives in its own key so that big 
 function saveStories(){
   const keep=new Set(userStories.map(s=>STK+s.id));
   userStories.forEach(s=>LS.set(STK+s.id,s));
-  try{ const del=[]; for(let i=0;i<localStorage.length;i++){ const k=localStorage.key(i); if(k&&k.startsWith(STK)&&!keep.has(k)) del.push(k); }
-    del.forEach(k=>localStorage.removeItem(k)); }catch(e){}
+  // never prune unknown story keys here: a stale tab/device would delete stories added elsewhere (and the sync would spread the deletion)
   LS.set('srp-stories',[]);
 }
 let userStories=loadStories();
@@ -1104,7 +1103,7 @@ function renderLibrary(){
       b.appendChild(ua);
       const d=document.createElement('span'); d.className='del'; d.textContent='מחק'; d.setAttribute('role','button');
       d.onclick=ev=>{ ev.stopPropagation(); armButton(d,'למחוק? לחץ שוב',()=>{
-        userStories=userStories.filter(x=>x.id!==s.id); delete progress[s.id];
+        userStories=userStories.filter(x=>x.id!==s.id); delete progress[s.id]; try{ localStorage.removeItem(STK+s.id); }catch(e){}
         saveStories(); LS.set('srp-progress',progress); renderLibrary(); toast('הסיפור נמחק'); }); };
       b.appendChild(d);
     }
